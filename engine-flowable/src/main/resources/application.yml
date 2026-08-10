@@ -26,6 +26,10 @@ spring:
             token-uri: ${SIL_SUPPLIER_TOKEN_URI:http://localhost:8081/supplier/oauth/token}
 
 sil:
+  workflow:
+    # How long the process sleeps between shipment polls. Passed to the model as a variable rather
+    # than hard-coded, so changing it does not mean deploying a new process version.
+    shipment-poll-delay: ${SIL_SHIPMENT_POLL_DELAY:PT6H}
   supplier:
     voip:
       base-url: ${SIL_SUPPLIER_BASE_URL:http://localhost:8081}
