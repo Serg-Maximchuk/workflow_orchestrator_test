@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 
 /** Supplier operation 2 of 6. */
 @Component("createSubscriptionDelegate")
-public class CreateSubscriptionDelegate extends AbstractOrderDelegate {
+public class CreateSubscriptionDelegate extends AbstractProvisioningDelegate {
 
     private final VoipSupplierClient supplier;
 
@@ -20,7 +20,7 @@ public class CreateSubscriptionDelegate extends AbstractOrderDelegate {
     }
 
     @Override
-    protected void executeStep(ServiceOrder order, DelegateExecution execution) {
+    protected void provision(ServiceOrder order, DelegateExecution execution) {
         SubscriptionResponse response = supplier.createSubscription(new CreateSubscriptionRequest(
                 order.getSupplierCustomerId(), order.getServiceSpecId(), order.getSpeedMbps()));
 

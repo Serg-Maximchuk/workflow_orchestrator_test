@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 
 /** Supplier operation 1 of 6, wired into the process as {@code ${createCustomerDelegate}}. */
 @Component("createCustomerDelegate")
-public class CreateCustomerDelegate extends AbstractOrderDelegate {
+public class CreateCustomerDelegate extends AbstractProvisioningDelegate {
 
     private final VoipSupplierClient supplier;
 
@@ -20,7 +20,7 @@ public class CreateCustomerDelegate extends AbstractOrderDelegate {
     }
 
     @Override
-    protected void executeStep(ServiceOrder order, DelegateExecution execution) {
+    protected void provision(ServiceOrder order, DelegateExecution execution) {
         CustomerResponse response = supplier.createCustomer(new CreateCustomerRequest(
                 order.getExternalId(),
                 order.getCustomerName(),

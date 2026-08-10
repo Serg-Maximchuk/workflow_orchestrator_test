@@ -11,7 +11,7 @@ import org.springframework.stereotype.Component;
 
 /** Supplier operation 6 of 6: request the handset shipment. */
 @Component("shipHardwareDelegate")
-public class ShipHardwareDelegate extends AbstractOrderDelegate {
+public class ShipHardwareDelegate extends AbstractProvisioningDelegate {
 
     private final VoipSupplierClient supplier;
 
@@ -21,7 +21,7 @@ public class ShipHardwareDelegate extends AbstractOrderDelegate {
     }
 
     @Override
-    protected void executeStep(ServiceOrder order, DelegateExecution execution) {
+    protected void provision(ServiceOrder order, DelegateExecution execution) {
         ShipmentResponse response = supplier.shipHardware(
                 new ShipHardwareRequest(order.getId(), order.getPostcode(), "VOIP_HANDSET"));
 

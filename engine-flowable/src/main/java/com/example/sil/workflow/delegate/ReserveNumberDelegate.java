@@ -10,7 +10,7 @@ import org.springframework.stereotype.Component;
 
 /** Supplier operation 4 of 6. */
 @Component("reserveNumberDelegate")
-public class ReserveNumberDelegate extends AbstractOrderDelegate {
+public class ReserveNumberDelegate extends AbstractProvisioningDelegate {
 
     private final VoipSupplierClient supplier;
 
@@ -20,7 +20,7 @@ public class ReserveNumberDelegate extends AbstractOrderDelegate {
     }
 
     @Override
-    protected void executeStep(ServiceOrder order, DelegateExecution execution) {
+    protected void provision(ServiceOrder order, DelegateExecution execution) {
         NumberReservationResponse response = supplier.reserveNumber(
                 new ReserveNumberRequest(order.getSupplierUserId(), areaCodeFor(order.getPostcode())));
 

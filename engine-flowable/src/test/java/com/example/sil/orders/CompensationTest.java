@@ -163,19 +163,35 @@ class CompensationTest extends AbstractOrderWorkflowTest {
 
         executeAllJobs();
 
-        // The guarantee is "at most one more step", not "stops instantly": the step that was
-        // already queued when the client cancelled still runs, and the checkpoint after it is what
-        // catches the cancellation. So the user does get created - and is then undone.
         assertThat(compensatingCallsInOrder())
                 .as("everything provisioned is undone, newest first, and nothing else is")
                 .containsExactly(
-                        "/supplier/v1/users/user-1",
                         "/supplier/v1/subscriptions/sub-1",
                         "/supplier/v1/customers/cust-1");
         assertThat(fetchOrder(orderId).read("$.state", String.class)).isEqualTo("cancelled");
 
-        // And the journey stopped there: no number was ever reserved.
+        // The guarantee worth having: once the cancellation is recorded, no further supplier call
+        // is made. The next step still runs as a token-carrier - something has to reach the
+        // checkpoint that routes into the unwind - but it does not provision anything, so there is
+        // nothing extra to undo.
+        supplier.verify(exactly(0), postRequestedFor(urlPathEqualTo(USERS_PATH)));
         supplier.verify(exactly(0), postRequestedFor(urlPathEqualTo(NUMBERS_PATH)));
+    }
+
+    @Test
+    @DisplayName("cancelling before any step ran touches the supplier not at all")
+    void cancellingBeforeAnyStepTouchesNothing() throws Exception {
+        String orderId = submitOrder();
+
+        mockMvc.perform(MockMvcRequestBuilders.post(ORDERS_URL + "/" + orderId + "/cancel"))
+                .andExpect(MockMvcResultMatchers.status().isAccepted());
+        executeAllJobs();
+
+        assertThat(fetchOrder(orderId).read("$.state", String.class)).isEqualTo("cancelled");
+        assertThat(compensatingCallsInOrder())
+                .as("nothing was provisioned, so there is nothing to undo")
+                .isEmpty();
+        supplier.verify(exactly(0), postRequestedFor(urlPathEqualTo(CUSTOMERS_PATH)));
     }
 
     @Test
