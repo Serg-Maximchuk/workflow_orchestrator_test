@@ -34,6 +34,18 @@ public interface OrderOrchestrator {
     void notifyNumberActivated(String orderId, boolean activated, String reason);
 
     /**
+     * Asks fulfilment to stop and undo whatever it has already provisioned.
+     *
+     * <p>Returns as soon as the request is accepted, not once the unwinding is finished:
+     * compensation is itself a series of supplier calls that can be slow, fail and be retried.
+     * Callers watch the order state to learn when it is actually done.
+     *
+     * @throws OrderNotCancellableException when fulfilment is no longer running - already
+     *     completed, already failed, already cancelled
+     */
+    void cancelOrderFulfilment(String orderId);
+
+    /**
      * What has happened to this order so far, newest step last. Read from the engine's own history,
      * which is the only place that knows how long each step took and which path was taken.
      */
@@ -48,6 +60,13 @@ public interface OrderOrchestrator {
      * @param durationMillis how long it took, or null while it is still running
      */
     record TimelineEntry(String name, Instant startedAt, Instant endedAt, Long durationMillis) {}
+
+    /** Raised when cancellation is requested for an order whose fulfilment is no longer running. */
+    class OrderNotCancellableException extends RuntimeException {
+        public OrderNotCancellableException(String orderId) {
+            super("Order " + orderId + " is no longer in a state that can be cancelled");
+        }
+    }
 
     /** Raised when a callback arrives for an order that is not waiting for one. */
     class NoWaitingOrderException extends RuntimeException {

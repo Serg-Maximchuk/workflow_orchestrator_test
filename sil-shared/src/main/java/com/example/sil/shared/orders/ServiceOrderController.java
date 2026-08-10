@@ -67,6 +67,20 @@ public class ServiceOrderController {
         return service.findByState(state);
     }
 
+    @PostMapping("/{id}/cancel")
+    @Operation(summary = "Cancel an order and undo what was already provisioned",
+            description = "Returns immediately. Compensation is itself a series of supplier calls, "
+                    + "so the order reaches the cancelled state only once they have all succeeded - "
+                    + "poll the order to see when.")
+    @ApiResponses({
+            @ApiResponse(responseCode = "202", description = "Cancellation accepted, unwinding started"),
+            @ApiResponse(responseCode = "404", description = "Unknown order id"),
+            @ApiResponse(responseCode = "409", description = "Fulfilment is no longer running")
+    })
+    public ResponseEntity<ServiceOrderResponse> cancel(@PathVariable String id) {
+        return ResponseEntity.status(HttpStatus.ACCEPTED).body(service.requestCancellation(id));
+    }
+
     @GetMapping("/{id}/timeline")
     @Operation(summary = "Show what the fulfilment workflow has done so far",
             description = "Read from the engine's own history, so it reports the steps actually "

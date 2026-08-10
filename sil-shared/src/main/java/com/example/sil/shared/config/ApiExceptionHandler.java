@@ -2,6 +2,7 @@ package com.example.sil.shared.config;
 
 import com.example.sil.shared.idempotency.IdempotencyKeyReuseException;
 import com.example.sil.shared.orders.OrderOrchestrator.NoWaitingOrderException;
+import com.example.sil.shared.orders.OrderOrchestrator.OrderNotCancellableException;
 import com.example.sil.shared.orders.ServiceOrderService.ServiceOrderNotFoundException;
 import com.example.sil.shared.orders.WorkflowAdmin.UnknownDeadLetterWorkException;
 import com.example.sil.shared.qualification.ServiceQualificationService.QualificationNotFoundException;
@@ -44,6 +45,11 @@ public class ApiExceptionHandler {
     @ExceptionHandler(NoWaitingOrderException.class)
     ProblemDetail handleUnexpectedCallback(NoWaitingOrderException e) {
         return problem(HttpStatus.CONFLICT, "No order waiting for this callback", e.getMessage());
+    }
+
+    @ExceptionHandler(OrderNotCancellableException.class)
+    ProblemDetail handleNotCancellable(OrderNotCancellableException e) {
+        return problem(HttpStatus.CONFLICT, "Order cannot be cancelled", e.getMessage());
     }
 
     @ExceptionHandler(IdempotencyKeyReuseException.class)

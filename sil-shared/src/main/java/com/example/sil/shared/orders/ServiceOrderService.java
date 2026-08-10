@@ -66,6 +66,19 @@ public class ServiceOrderService {
                 .toList();
     }
 
+    /**
+     * Requests cancellation. The order is not cancelled when this returns - it is cancelled once
+     * compensation has undone everything provisioned so far, which the process drives on its own.
+     */
+    @Transactional
+    public ServiceOrderResponse requestCancellation(String orderId) {
+        ServiceOrder order = repository.findById(orderId)
+                .orElseThrow(() -> new ServiceOrderNotFoundException(orderId));
+
+        orchestrator.cancelOrderFulfilment(order.getId());
+        return toResponse(order);
+    }
+
     @Transactional(readOnly = true)
     public OrderTimelineResponse timelineOf(String orderId) {
         ServiceOrder order = repository.findById(orderId)
