@@ -23,6 +23,14 @@
   every engine stays visible in the working tree, not only in git history, and the
   implementations can be compared directly.
 
+## Code style
+
+- No hand-written getters/setters. Use `record` where the type is immutable data (DTOs,
+  `@ConfigurationProperties`, value objects) and Lombok where the language cannot (JPA entities:
+  `@Getter`, `@NoArgsConstructor(access = PROTECTED)`, `@Builder` for long argument lists).
+- Never `@Data` or `@EqualsAndHashCode` on a JPA entity — identity is the primary key, and
+  field-based equality breaks once a mutable field changes while the instance is in a collection.
+
 ## Build
 
 - Java 25 toolchain, Spring Boot 4.1.x, Flowable 8.x (the Flowable line that supports Spring Boot 4).
