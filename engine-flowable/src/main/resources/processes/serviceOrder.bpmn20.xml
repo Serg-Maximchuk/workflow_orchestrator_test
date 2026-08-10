@@ -189,7 +189,11 @@
       <sequenceFlow id="reminderToEnd" sourceRef="sendReminder" targetRef="reminderSent"/>
       <endEvent id="reminderSent" name="Reminder sent"/>
 
-      <sequenceFlow id="toShipHardware" sourceRef="awaitActivation" targetRef="shipHardware"/>
+      <sequenceFlow id="toRecordActivation" sourceRef="awaitActivation" targetRef="recordActivation"/>
+      <serviceTask id="recordActivation" name="Record number activation"
+                   flowable:async="true"
+                   flowable:delegateExpression="${recordActivationDelegate}"/>
+      <sequenceFlow id="toShipHardware" sourceRef="recordActivation" targetRef="shipHardware"/>
 
       <serviceTask id="shipHardware" name="Ship hardware"
                    flowable:async="true"
@@ -378,28 +382,28 @@
         <omgdc:Bounds x="67" y="60" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape_cancelOrderTask" bpmnElement="cancelOrderTask">
-        <omgdc:Bounds x="1608" y="60" width="140" height="80"/>
+        <omgdc:Bounds x="1708" y="60" width="140" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape_completeOrder" bpmnElement="completeOrder">
-        <omgdc:Bounds x="3246" y="60" width="140" height="80"/>
+        <omgdc:Bounds x="3446" y="60" width="140" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape_orderCompleted" bpmnElement="orderCompleted">
-        <omgdc:Bounds x="3446" y="60" width="36" height="36"/>
+        <omgdc:Bounds x="3646" y="60" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape_outcomeGateway" bpmnElement="outcomeGateway">
         <omgdc:Bounds x="60" y="146" width="50" height="50"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape_failOrder" bpmnElement="failOrder">
-        <omgdc:Bounds x="1608" y="190" width="140" height="80"/>
+        <omgdc:Bounds x="1708" y="190" width="140" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape_orderCancelled" bpmnElement="orderCancelled">
-        <omgdc:Bounds x="3298" y="190" width="36" height="36"/>
+        <omgdc:Bounds x="3498" y="190" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape_orderFailed" bpmnElement="orderFailed">
-        <omgdc:Bounds x="3298" y="276" width="36" height="36"/>
+        <omgdc:Bounds x="3498" y="276" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape_fulfilment" bpmnElement="fulfilment" isExpanded="true">
-        <omgdc:Bounds x="170" y="320" width="3016" height="512"/>
+        <omgdc:Bounds x="170" y="320" width="3216" height="512"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape_activationTimedOut" bpmnElement="activationTimedOut">
         <omgdc:Bounds x="210" y="360" width="140" height="80"/>
@@ -434,17 +438,20 @@
       <bpmndi:BPMNShape id="shape_awaitActivation" bpmnElement="awaitActivation" isExpanded="true">
         <omgdc:Bounds x="1850" y="360" width="308" height="166"/>
       </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="shape_shipHardware" bpmnElement="shipHardware">
+      <bpmndi:BPMNShape id="shape_recordActivation" bpmnElement="recordActivation">
         <omgdc:Bounds x="2218" y="360" width="140" height="80"/>
       </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="shape_shipHardware" bpmnElement="shipHardware">
+        <omgdc:Bounds x="2418" y="360" width="140" height="80"/>
+      </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape_afterShipment" bpmnElement="afterShipment">
-        <omgdc:Bounds x="2418" y="360" width="50" height="50"/>
+        <omgdc:Bounds x="2618" y="360" width="50" height="50"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape_awaitDelivery" bpmnElement="awaitDelivery" isExpanded="true">
-        <omgdc:Bounds x="2528" y="360" width="522" height="252"/>
+        <omgdc:Bounds x="2728" y="360" width="522" height="252"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape_fulfilmentCancelled" bpmnElement="fulfilmentCancelled">
-        <omgdc:Bounds x="3110" y="360" width="36" height="36"/>
+        <omgdc:Bounds x="3310" y="360" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape_waitStarted" bpmnElement="waitStarted">
         <omgdc:Bounds x="1890" y="400" width="36" height="36"/>
@@ -456,16 +463,16 @@
         <omgdc:Bounds x="2082" y="400" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape_deliveryWaitStarted" bpmnElement="deliveryWaitStarted">
-        <omgdc:Bounds x="2568" y="400" width="36" height="36"/>
+        <omgdc:Bounds x="2768" y="400" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape_deliveredGateway" bpmnElement="deliveredGateway">
-        <omgdc:Bounds x="2664" y="400" width="50" height="50"/>
+        <omgdc:Bounds x="2864" y="400" width="50" height="50"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape_delivered" bpmnElement="delivered">
-        <omgdc:Bounds x="2774" y="400" width="36" height="36"/>
+        <omgdc:Bounds x="2974" y="400" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape_pollShipment" bpmnElement="pollShipment">
-        <omgdc:Bounds x="2870" y="400" width="140" height="80"/>
+        <omgdc:Bounds x="3070" y="400" width="140" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape_compensateCreateCustomer" bpmnElement="compensateCreateCustomer">
         <omgdc:Bounds x="430" y="422" width="36" height="36"/>
@@ -486,13 +493,13 @@
         <omgdc:Bounds x="1715" y="422" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape_compensateShipHardware" bpmnElement="compensateShipHardware">
-        <omgdc:Bounds x="2238" y="422" width="36" height="36"/>
+        <omgdc:Bounds x="2438" y="422" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape_provisioned" bpmnElement="provisioned">
-        <omgdc:Bounds x="3110" y="446" width="36" height="36"/>
+        <omgdc:Bounds x="3310" y="446" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape_waitBeforePolling" bpmnElement="waitBeforePolling">
-        <omgdc:Bounds x="2774" y="486" width="36" height="36"/>
+        <omgdc:Bounds x="2974" y="486" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape_fulfilmentStarted" bpmnElement="fulfilmentStarted">
         <omgdc:Bounds x="262" y="490" width="36" height="36"/>
@@ -525,16 +532,16 @@
         <omgdc:Bounds x="1650" y="540" width="140" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape_undoShipHardware" bpmnElement="undoShipHardware">
-        <omgdc:Bounds x="2218" y="540" width="140" height="80"/>
+        <omgdc:Bounds x="2418" y="540" width="140" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape_sendReminder" bpmnElement="sendReminder">
         <omgdc:Bounds x="210" y="576" width="140" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape_cancelDuringDelivery" bpmnElement="cancelDuringDelivery">
-        <omgdc:Bounds x="2548" y="594" width="36" height="36"/>
+        <omgdc:Bounds x="2748" y="594" width="36" height="36"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape_recordCancellation" bpmnElement="recordCancellation">
-        <omgdc:Bounds x="2719" y="662" width="140" height="80"/>
+        <omgdc:Bounds x="2919" y="662" width="140" height="80"/>
       </bpmndi:BPMNShape>
       <bpmndi:BPMNShape id="shape_fulfilmentUnwound" bpmnElement="fulfilmentUnwound">
         <omgdc:Bounds x="190" y="814" width="36" height="36"/>
@@ -544,12 +551,12 @@
         <omgdi:waypoint x="170" y="576"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_toCompleteOrder" bpmnElement="toCompleteOrder">
-        <omgdi:waypoint x="3186" y="576"/>
-        <omgdi:waypoint x="3246" y="100"/>
+        <omgdi:waypoint x="3386" y="576"/>
+        <omgdi:waypoint x="3446" y="100"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_toOrderCompleted" bpmnElement="toOrderCompleted">
-        <omgdi:waypoint x="3386" y="100"/>
-        <omgdi:waypoint x="3446" y="78"/>
+        <omgdi:waypoint x="3586" y="100"/>
+        <omgdi:waypoint x="3646" y="78"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_unwoundToOutcome" bpmnElement="unwoundToOutcome">
         <omgdi:waypoint x="226" y="832"/>
@@ -557,19 +564,19 @@
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_outcomeToCancelled" bpmnElement="outcomeToCancelled">
         <omgdi:waypoint x="110" y="171"/>
-        <omgdi:waypoint x="1608" y="100"/>
+        <omgdi:waypoint x="1708" y="100"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_outcomeToFailed" bpmnElement="outcomeToFailed">
         <omgdi:waypoint x="110" y="171"/>
-        <omgdi:waypoint x="1608" y="230"/>
+        <omgdi:waypoint x="1708" y="230"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_toOrderCancelled" bpmnElement="toOrderCancelled">
-        <omgdi:waypoint x="1748" y="100"/>
-        <omgdi:waypoint x="3298" y="208"/>
+        <omgdi:waypoint x="1848" y="100"/>
+        <omgdi:waypoint x="3498" y="208"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_toOrderFailed" bpmnElement="toOrderFailed">
-        <omgdi:waypoint x="1748" y="230"/>
-        <omgdi:waypoint x="3298" y="294"/>
+        <omgdi:waypoint x="1848" y="230"/>
+        <omgdi:waypoint x="3498" y="294"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_toCreateCustomer" bpmnElement="toCreateCustomer">
         <omgdi:waypoint x="298" y="508"/>
@@ -585,7 +592,7 @@
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_afterCustomerCancel" bpmnElement="afterCustomerCancel">
         <omgdi:waypoint x="660" y="385"/>
-        <omgdi:waypoint x="2719" y="702"/>
+        <omgdi:waypoint x="2919" y="702"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_createSubscriptionToCheck" bpmnElement="createSubscriptionToCheck">
         <omgdi:waypoint x="860" y="400"/>
@@ -597,7 +604,7 @@
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_afterSubscriptionCancel" bpmnElement="afterSubscriptionCancel">
         <omgdi:waypoint x="970" y="385"/>
-        <omgdi:waypoint x="2719" y="702"/>
+        <omgdi:waypoint x="2919" y="702"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_createUserToCheck" bpmnElement="createUserToCheck">
         <omgdi:waypoint x="1170" y="400"/>
@@ -609,7 +616,7 @@
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_afterUserCancel" bpmnElement="afterUserCancel">
         <omgdi:waypoint x="1280" y="385"/>
-        <omgdi:waypoint x="2719" y="702"/>
+        <omgdi:waypoint x="2919" y="702"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_reserveNumberToCheck" bpmnElement="reserveNumberToCheck">
         <omgdi:waypoint x="1480" y="400"/>
@@ -621,11 +628,11 @@
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_afterNumberCancel" bpmnElement="afterNumberCancel">
         <omgdi:waypoint x="1590" y="385"/>
-        <omgdi:waypoint x="2719" y="702"/>
+        <omgdi:waypoint x="2919" y="702"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_rejectedToCancel" bpmnElement="rejectedToCancel">
         <omgdi:waypoint x="1706" y="440"/>
-        <omgdi:waypoint x="3110" y="378"/>
+        <omgdi:waypoint x="3310" y="378"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_toAwaitActivation" bpmnElement="toAwaitActivation">
         <omgdi:waypoint x="1790" y="400"/>
@@ -637,7 +644,7 @@
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_timeoutToCancel" bpmnElement="timeoutToCancel">
         <omgdi:waypoint x="350" y="400"/>
-        <omgdi:waypoint x="3110" y="378"/>
+        <omgdi:waypoint x="3310" y="378"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_reminderToSend" bpmnElement="reminderToSend">
         <omgdi:waypoint x="1906" y="526"/>
@@ -647,37 +654,41 @@
         <omgdi:waypoint x="350" y="616"/>
         <omgdi:waypoint x="462" y="508"/>
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="edge_toShipHardware" bpmnElement="toShipHardware">
+      <bpmndi:BPMNEdge id="edge_toRecordActivation" bpmnElement="toRecordActivation">
         <omgdi:waypoint x="2158" y="443"/>
         <omgdi:waypoint x="2218" y="400"/>
       </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="edge_shipHardwareToCheck" bpmnElement="shipHardwareToCheck">
+      <bpmndi:BPMNEdge id="edge_toShipHardware" bpmnElement="toShipHardware">
         <omgdi:waypoint x="2358" y="400"/>
-        <omgdi:waypoint x="2418" y="385"/>
+        <omgdi:waypoint x="2418" y="400"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="edge_shipHardwareToCheck" bpmnElement="shipHardwareToCheck">
+        <omgdi:waypoint x="2558" y="400"/>
+        <omgdi:waypoint x="2618" y="385"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_afterShipmentContinue" bpmnElement="afterShipmentContinue">
-        <omgdi:waypoint x="2468" y="385"/>
-        <omgdi:waypoint x="2528" y="486"/>
+        <omgdi:waypoint x="2668" y="385"/>
+        <omgdi:waypoint x="2728" y="486"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_afterShipmentCancel" bpmnElement="afterShipmentCancel">
-        <omgdi:waypoint x="2468" y="385"/>
-        <omgdi:waypoint x="2719" y="702"/>
+        <omgdi:waypoint x="2668" y="385"/>
+        <omgdi:waypoint x="2919" y="702"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_toProvisioned" bpmnElement="toProvisioned">
-        <omgdi:waypoint x="3050" y="486"/>
-        <omgdi:waypoint x="3110" y="464"/>
+        <omgdi:waypoint x="3250" y="486"/>
+        <omgdi:waypoint x="3310" y="464"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_cancelActivationToRecord" bpmnElement="cancelActivationToRecord">
         <omgdi:waypoint x="1996" y="526"/>
-        <omgdi:waypoint x="2719" y="702"/>
+        <omgdi:waypoint x="2919" y="702"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_cancelDeliveryToRecord" bpmnElement="cancelDeliveryToRecord">
-        <omgdi:waypoint x="2584" y="612"/>
-        <omgdi:waypoint x="2719" y="702"/>
+        <omgdi:waypoint x="2784" y="612"/>
+        <omgdi:waypoint x="2919" y="702"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_recordCancellationToCancel" bpmnElement="recordCancellationToCancel">
-        <omgdi:waypoint x="2859" y="702"/>
-        <omgdi:waypoint x="3110" y="378"/>
+        <omgdi:waypoint x="3059" y="702"/>
+        <omgdi:waypoint x="3310" y="378"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_waitToMessage" bpmnElement="waitToMessage">
         <omgdi:waypoint x="1926" y="418"/>
@@ -688,24 +699,24 @@
         <omgdi:waypoint x="2082" y="418"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_toWaitBeforePollingInner" bpmnElement="toWaitBeforePollingInner">
-        <omgdi:waypoint x="2604" y="418"/>
-        <omgdi:waypoint x="2774" y="504"/>
+        <omgdi:waypoint x="2804" y="418"/>
+        <omgdi:waypoint x="2974" y="504"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_toPollShipment" bpmnElement="toPollShipment">
-        <omgdi:waypoint x="2810" y="504"/>
-        <omgdi:waypoint x="2870" y="440"/>
+        <omgdi:waypoint x="3010" y="504"/>
+        <omgdi:waypoint x="3070" y="440"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_toDeliveredGateway" bpmnElement="toDeliveredGateway">
-        <omgdi:waypoint x="3010" y="440"/>
-        <omgdi:waypoint x="2664" y="425"/>
+        <omgdi:waypoint x="3210" y="440"/>
+        <omgdi:waypoint x="2864" y="425"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_notDeliveredYet" bpmnElement="notDeliveredYet">
-        <omgdi:waypoint x="2714" y="425"/>
-        <omgdi:waypoint x="2774" y="504"/>
+        <omgdi:waypoint x="2914" y="425"/>
+        <omgdi:waypoint x="2974" y="504"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_deliveredToDeliveryEnd" bpmnElement="deliveredToDeliveryEnd">
-        <omgdi:waypoint x="2714" y="425"/>
-        <omgdi:waypoint x="2774" y="418"/>
+        <omgdi:waypoint x="2914" y="425"/>
+        <omgdi:waypoint x="2974" y="418"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_assoc_compensateCreateCustomer" bpmnElement="assocCustomer">
         <omgdi:waypoint x="448" y="458"/>
@@ -728,8 +739,8 @@
         <omgdi:waypoint x="1720" y="540"/>
       </bpmndi:BPMNEdge>
       <bpmndi:BPMNEdge id="edge_assoc_compensateShipHardware" bpmnElement="assocShipment">
-        <omgdi:waypoint x="2256" y="458"/>
-        <omgdi:waypoint x="2288" y="540"/>
+        <omgdi:waypoint x="2456" y="458"/>
+        <omgdi:waypoint x="2488" y="540"/>
       </bpmndi:BPMNEdge>
     </bpmndi:BPMNPlane>
   </bpmndi:BPMNDiagram>
