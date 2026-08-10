@@ -22,6 +22,18 @@ public interface OrderOrchestrator {
     String startOrderFulfilment(ServiceOrder order);
 
     /**
+     * Tells a waiting order that the supplier has finished activating its number.
+     *
+     * <p>This is the inbound half of an asynchronous integration: the process is parked on a
+     * message, and this delivers it. Correlation is by order id rather than by any engine
+     * identifier, so the supplier's callback never has to know what a process instance is.
+     *
+     * @throws NoWaitingOrderException when no order is waiting for this - a late, duplicate or
+     *     simply unknown callback, which must not create state out of thin air
+     */
+    void notifyNumberActivated(String orderId, boolean activated, String reason);
+
+    /**
      * What has happened to this order so far, newest step last. Read from the engine's own history,
      * which is the only place that knows how long each step took and which path was taken.
      */
@@ -36,4 +48,11 @@ public interface OrderOrchestrator {
      * @param durationMillis how long it took, or null while it is still running
      */
     record TimelineEntry(String name, Instant startedAt, Instant endedAt, Long durationMillis) {}
+
+    /** Raised when a callback arrives for an order that is not waiting for one. */
+    class NoWaitingOrderException extends RuntimeException {
+        public NoWaitingOrderException(String orderId) {
+            super("No order " + orderId + " is waiting for a number activation callback");
+        }
+    }
 }
