@@ -2,7 +2,6 @@
 
 ## Language
 
-- Conversation may be in Ukrainian or English, whichever the user prefers at the moment.
 - **Everything written to a file is always English** — code, comments, docs, README, commit
   messages, BPMN element names, log messages. No exceptions, regardless of the language of the
   request that triggered the change.
@@ -26,6 +25,6 @@
 
 ## Build
 
-- Java 21 toolchain, Spring Boot 3.5.x (Flowable 7.1.0 does not support Spring Boot 4 yet).
+- Java 25 toolchain, Spring Boot 4.1.x, Flowable 8.x (the Flowable line that supports Spring Boot 4).
 - Two test lanes: `./gradlew test` (fast, no Docker) and `./gradlew integrationTest`
   (Testcontainers, tagged `integration`).
