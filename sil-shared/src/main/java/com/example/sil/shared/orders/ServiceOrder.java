@@ -77,6 +77,26 @@ public class ServiceOrder {
     @Column(name = "phone_number", length = 32)
     private String phoneNumber;
 
+    @Column(name = "supplier_activation_id", length = 64)
+    private String supplierActivationId;
+
+    @Column(name = "number_activated", nullable = false)
+    private boolean numberActivated;
+
+    @Column(name = "supplier_shipment_id", length = 64)
+    private String supplierShipmentId;
+
+    @Column(name = "shipment_status", length = 30)
+    private String shipmentStatus;
+
+    /** How many times the shipment has been polled - visible evidence that a timer loop is running. */
+    @Column(name = "shipment_poll_count", nullable = false)
+    private int shipmentPollCount;
+
+    /** How many "your order is still in progress" reminders the customer has been sent. */
+    @Column(name = "reminders_sent", nullable = false)
+    private int remindersSent;
+
     @Column(name = "failure_reason", length = 500)
     private String failureReason;
 
@@ -121,6 +141,33 @@ public class ServiceOrder {
 
     public void numberReserved(String phoneNumber) {
         this.phoneNumber = phoneNumber;
+        touch();
+    }
+
+    public void activationRequested(String supplierActivationId) {
+        this.supplierActivationId = supplierActivationId;
+        touch();
+    }
+
+    public void numberActivated() {
+        this.numberActivated = true;
+        touch();
+    }
+
+    public void hardwareShipped(String supplierShipmentId) {
+        this.supplierShipmentId = supplierShipmentId;
+        this.shipmentStatus = "requested";
+        touch();
+    }
+
+    public void shipmentPolled(String shipmentStatus) {
+        this.shipmentStatus = shipmentStatus;
+        this.shipmentPollCount++;
+        touch();
+    }
+
+    public void reminderSent() {
+        this.remindersSent++;
         touch();
     }
 

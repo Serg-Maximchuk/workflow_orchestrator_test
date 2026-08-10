@@ -1,0 +1,38 @@
+databaseChangeLog:
+  - changeSet:
+      id: 004-async-fulfilment-columns
+      author: sil
+      comment: >-
+        Columns for the two asynchronous supplier operations: activation, whose outcome arrives on
+        a callback, and hardware shipment, whose status has to be polled on a timer.
+      changes:
+        - addColumn:
+            tableName: service_order
+            columns:
+              - column:
+                  name: supplier_activation_id
+                  type: varchar(64)
+              - column:
+                  name: number_activated
+                  type: boolean
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false
+              - column:
+                  name: supplier_shipment_id
+                  type: varchar(64)
+              - column:
+                  name: shipment_status
+                  type: varchar(30)
+              - column:
+                  name: shipment_poll_count
+                  type: int
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+              - column:
+                  name: reminders_sent
+                  type: int
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false

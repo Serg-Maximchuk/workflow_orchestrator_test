@@ -3,6 +3,7 @@ package com.example.sil.shared.orders;
 import com.example.sil.shared.correlation.CorrelationContext;
 import com.example.sil.shared.idempotency.IdempotencyService;
 import com.example.sil.shared.orders.OrderDtos.CreateServiceOrderRequest;
+import com.example.sil.shared.orders.OrderDtos.Fulfilment;
 import com.example.sil.shared.orders.OrderDtos.OrderTimelineResponse;
 import com.example.sil.shared.orders.OrderDtos.ServiceOrderResponse;
 import com.example.sil.shared.orders.OrderDtos.SupplierRefs;
@@ -117,6 +118,11 @@ public class ServiceOrderService {
                         order.getSupplierSubscriptionId(),
                         order.getSupplierUserId(),
                         order.getPhoneNumber()),
+                new Fulfilment(
+                        order.isNumberActivated(),
+                        order.getShipmentStatus(),
+                        order.getShipmentPollCount(),
+                        order.getRemindersSent()),
                 order.getFailureReason(),
                 order.getCorrelationId(),
                 order.getCreatedAt(),

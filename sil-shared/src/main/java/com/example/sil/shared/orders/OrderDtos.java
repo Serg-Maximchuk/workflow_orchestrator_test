@@ -45,6 +45,7 @@ public final class OrderDtos {
             String externalId,
             @Schema(description = "TMF641 order state", example = "inProgress") String state,
             @Schema(description = "Provisioning references gathered so far") SupplierRefs supplierRefs,
+            @Schema(description = "Progress of the asynchronous parts of fulfilment") Fulfilment fulfilment,
             @Schema(description = "Why the order failed, when it did") String failureReason,
             String correlationId,
             Instant createdAt,
@@ -55,6 +56,15 @@ public final class OrderDtos {
                     + "step has not completed yet")
     public record SupplierRefs(
             String customerId, String subscriptionId, String userId, String phoneNumber) {}
+
+    @Schema(name = "Fulfilment",
+            description = "How the long-running parts of the order are getting on: the activation "
+                    + "we are waiting on a callback for, and the shipment we poll")
+    public record Fulfilment(
+            boolean numberActivated,
+            String shipmentStatus,
+            int shipmentPollCount,
+            int remindersSent) {}
 
     @Schema(name = "OrderTimeline", description = "What the workflow has done so far")
     public record OrderTimelineResponse(String orderId, String state, List<TimelineStep> steps) {}
