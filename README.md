@@ -18,12 +18,12 @@ end up implemented several times, side by side, so the implementations can be co
 
 | Module | Engine | Model | Status |
 |---|---|---|---|
-| [`engine-flowable`](engine-flowable) | Flowable 7, embedded | BPMN 2.0, engine inside the Spring context, state in the app's own Postgres | Phase 0 done |
+| [`engine-flowable`](engine-flowable) | Flowable 8, embedded | BPMN 2.0, engine inside the Spring context, state in the app's own Postgres | Phase 0 done |
 | `engine-camunda8` | Camunda 8 / Zeebe | BPMN 2.0, remote broker, job workers | planned |
 
 ## Requirements
 
-- JDK 21+ (the Gradle toolchain pins the build to 21; a newer JDK on the machine is fine)
+- JDK 25 (the Gradle toolchain pins the build to 25 and will provision it if missing)
 - Docker (integration tests and the local stack)
 
 ## Running
@@ -83,8 +83,8 @@ Everything at once:
 
 ## Notes
 
-- Spring Boot is pinned to 3.5.x on purpose: Flowable 7.1.0 is built against Spring Boot 3.3/3.4
-  and its auto-configuration does not work on Spring Boot 4 yet.
+- Spring Boot 4.1.0 with Flowable 8.0.0. Flowable 8 is the line built against Spring Boot 4.0.x /
+  Spring Framework 7; the older Flowable 7.x line would pin the whole build back to Spring Boot 3.x.
 - Flowable manages its own `ACT_*` schema in the same database as the business data. That
   co-location — process state and business state in one transaction — is the main reason this
   project starts with an embedded engine rather than a remote broker.

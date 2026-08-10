@@ -8,7 +8,7 @@ restart, idempotency, correlation IDs, async/event-driven integration, sagas, Op
 
 ## 0. Engine choice
 
-**Primary: Flowable 7, embedded in Spring Boot.**
+**Primary: Flowable 8, embedded in Spring Boot.**
 
 Why this one:
 - The vacancy explicitly asks to *"embed and configure a workflow engine"* and lists *"experience
@@ -18,6 +18,7 @@ Why this one:
 - Its BPMN 2.0 support is nearly identical to Camunda 7/8 — timers, boundary events, compensation,
   message correlation, incidents all transfer 1:1. You learn BPMN, not a vendor.
 - Actively maintained, free, Apache-2.0, no EOL risk hanging over it (unlike Camunda 7 CE).
+  Flowable 8 tracks Spring Boot 4 / Spring Framework 7, so the project is not stuck on an old baseline.
 - Local run is `docker compose up postgres` + `./gradlew bootRun`. Fast test cycle, works in GitHub
   Actions through Testcontainers.
 
@@ -140,15 +141,15 @@ must-have demo.
 
 ## 3. Stack
 
-- Java 21 (toolchain; the machine has JDK 25 — set `languageVersion = 21` in the Gradle toolchain to
-  stay off the edge of Flowable/Spring support)
-- Spring Boot 3.5.x, Gradle Kotlin DSL
-- `flowable-spring-boot-starter` 7.x (plus `flowable-spring-boot-starter-actuator`)
+- Java 25 (Gradle toolchain)
+- Spring Boot 4.1.x, Gradle Kotlin DSL
+- `flowable-spring-boot-starter-process` 8.x (the line built against Spring Boot 4 / Spring
+  Framework 7; plus `flowable-spring-boot-starter-actuator` later)
 - PostgreSQL 16, Liquibase for our own tables (Flowable creates its own; in production set that to
   `false` and use generated DDL)
 - WireMock (standalone in docker and as a Testcontainer) — supplier stubs
 - RabbitMQ **or** LocalStack (SQS + Secrets Manager) — to touch the AWS side of the vacancy
-- Testcontainers (Postgres + WireMock + Rabbit/LocalStack)
+- Testcontainers 2.x (Postgres + WireMock + Rabbit/LocalStack)
 - Resilience4j, springdoc-openapi, Micrometer + Prometheus + Grafana (optional)
 - React (Vite + TS) — a small UI: order list, process timeline, "retry dead letter" button, user task
   approval. The vacancy asks for ReactJS, and this covers it cheaply.
