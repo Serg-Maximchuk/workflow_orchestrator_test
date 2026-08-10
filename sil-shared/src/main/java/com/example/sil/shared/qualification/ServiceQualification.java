@@ -5,10 +5,26 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import lombok.AccessLevel;
+import lombok.AllArgsConstructor;
+import lombok.Builder;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
-/** Stored result of a qualification, so {@code GET /{id}} can answer after the fact. */
+/**
+ * Stored result of a qualification, so {@code GET /{id}} can answer after the fact.
+ *
+ * <p>Built through {@code @Builder} because seven constructor arguments of which five are strings
+ * is a swap waiting to happen - {@code postcode} and {@code serviceSpecId} in the wrong order would
+ * compile perfectly. See {@link com.example.sil.shared.idempotency.IdempotencyRecord} for why this
+ * carries {@code @Getter} but not {@code @Data}.
+ */
 @Entity
 @Table(name = "service_qualification")
+@Getter
+@Builder
+@NoArgsConstructor(access = AccessLevel.PROTECTED) // required by JPA
+@AllArgsConstructor(access = AccessLevel.PRIVATE) // used by the builder
 public class ServiceQualification {
 
     @Id
@@ -35,58 +51,4 @@ public class ServiceQualification {
 
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
-
-    protected ServiceQualification() {
-        // for JPA
-    }
-
-    public ServiceQualification(
-            String id,
-            String externalId,
-            String postcode,
-            String serviceSpecId,
-            String qualificationResult,
-            Integer maxSpeedMbps,
-            String correlationId) {
-        this.id = id;
-        this.externalId = externalId;
-        this.postcode = postcode;
-        this.serviceSpecId = serviceSpecId;
-        this.qualificationResult = qualificationResult;
-        this.maxSpeedMbps = maxSpeedMbps;
-        this.correlationId = correlationId;
-        this.createdAt = Instant.now();
-    }
-
-    public String getId() {
-        return id;
-    }
-
-    public String getExternalId() {
-        return externalId;
-    }
-
-    public String getPostcode() {
-        return postcode;
-    }
-
-    public String getServiceSpecId() {
-        return serviceSpecId;
-    }
-
-    public String getQualificationResult() {
-        return qualificationResult;
-    }
-
-    public Integer getMaxSpeedMbps() {
-        return maxSpeedMbps;
-    }
-
-    public String getCorrelationId() {
-        return correlationId;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
-    }
 }

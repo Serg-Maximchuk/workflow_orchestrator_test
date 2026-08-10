@@ -5,14 +5,25 @@ import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
 import java.time.Instant;
+import lombok.AccessLevel;
+import lombok.Getter;
+import lombok.NoArgsConstructor;
 
 /**
  * One row per {@code Idempotency-Key} the API has seen, holding the response that was returned the
  * first time. The primary key is the idempotency key itself, so a concurrent duplicate loses the
  * insert race at the database level rather than in application logic.
+ *
+ * <p>Only {@code @Getter} and a protected no-args constructor are generated. Deliberately not
+ * {@code @Data} or {@code @EqualsAndHashCode}: an entity's identity is its primary key, and
+ * generating equality from all fields breaks as soon as a mutable field changes while the instance
+ * sits in a collection. Setters are left out for the same reason the fields are only assigned in
+ * the constructor - this row is written once and never updated.
  */
 @Entity
 @Table(name = "idempotency_record")
+@Getter
+@NoArgsConstructor(access = AccessLevel.PROTECTED) // required by JPA
 public class IdempotencyRecord {
 
     @Id
@@ -32,10 +43,6 @@ public class IdempotencyRecord {
     @Column(name = "created_at", nullable = false)
     private Instant createdAt;
 
-    protected IdempotencyRecord() {
-        // for JPA
-    }
-
     public IdempotencyRecord(
             String idempotencyKey, String requestFingerprint, String resourceId, int responseStatus) {
         this.idempotencyKey = idempotencyKey;
@@ -43,25 +50,5 @@ public class IdempotencyRecord {
         this.resourceId = resourceId;
         this.responseStatus = responseStatus;
         this.createdAt = Instant.now();
-    }
-
-    public String getIdempotencyKey() {
-        return idempotencyKey;
-    }
-
-    public String getRequestFingerprint() {
-        return requestFingerprint;
-    }
-
-    public String getResourceId() {
-        return resourceId;
-    }
-
-    public int getResponseStatus() {
-        return responseStatus;
-    }
-
-    public Instant getCreatedAt() {
-        return createdAt;
     }
 }

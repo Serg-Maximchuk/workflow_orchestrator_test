@@ -7,6 +7,7 @@ import com.example.sil.shared.qualification.QualificationDtos.CheckServiceQualif
 import com.example.sil.shared.supplier.VoipSupplierClient;
 import com.example.sil.shared.supplier.VoipSupplierClient.AvailabilityRequest;
 import com.example.sil.shared.supplier.VoipSupplierClient.AvailabilityResponse;
+import java.time.Instant;
 import java.util.UUID;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -65,14 +66,16 @@ public class ServiceQualificationService {
                 request.place().postcode(), request.serviceSpecId(), request.requestedSpeedMbps()));
 
         String result = availability.available() ? QUALIFIED : UNQUALIFIED;
-        ServiceQualification stored = repository.save(new ServiceQualification(
-                "sq-" + UUID.randomUUID(),
-                request.externalId(),
-                request.place().postcode(),
-                request.serviceSpecId(),
-                result,
-                availability.maxSpeedMbps(),
-                CorrelationContext.currentOrNew()));
+        ServiceQualification stored = repository.save(ServiceQualification.builder()
+                .id("sq-" + UUID.randomUUID())
+                .externalId(request.externalId())
+                .postcode(request.place().postcode())
+                .serviceSpecId(request.serviceSpecId())
+                .qualificationResult(result)
+                .maxSpeedMbps(availability.maxSpeedMbps())
+                .correlationId(CorrelationContext.currentOrNew())
+                .createdAt(Instant.now())
+                .build());
 
         return stored.getId();
     }
