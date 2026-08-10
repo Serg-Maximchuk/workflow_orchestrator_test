@@ -47,7 +47,14 @@
       </boundaryEvent>
       <serviceTask id="undoCreateCustomer" name="Delete customer" isForCompensation="true"
                    flowable:delegateExpression="${deleteCustomerDelegate}"/>
-      <sequenceFlow id="toCreateSubscription" sourceRef="createCustomer" targetRef="createSubscription"/>
+      <sequenceFlow id="createCustomerToCheck" sourceRef="createCustomer" targetRef="afterCustomer"/>
+      <exclusiveGateway id="afterCustomer" name="Cancelled?"/>
+      <sequenceFlow id="afterCustomerContinue" sourceRef="afterCustomer" targetRef="createSubscription">
+        <conditionExpression xsi:type="tFormalExpression">${!cancellationRequested}</conditionExpression>
+      </sequenceFlow>
+      <sequenceFlow id="afterCustomerCancel" sourceRef="afterCustomer" targetRef="recordCancellation">
+        <conditionExpression xsi:type="tFormalExpression">${cancellationRequested}</conditionExpression>
+      </sequenceFlow>
 
       <serviceTask id="createSubscription" name="Create subscription"
                    flowable:async="true"
@@ -58,7 +65,14 @@
       </boundaryEvent>
       <serviceTask id="undoCreateSubscription" name="Delete subscription" isForCompensation="true"
                    flowable:delegateExpression="${deleteSubscriptionDelegate}"/>
-      <sequenceFlow id="toCreateUser" sourceRef="createSubscription" targetRef="createUser"/>
+      <sequenceFlow id="createSubscriptionToCheck" sourceRef="createSubscription" targetRef="afterSubscription"/>
+      <exclusiveGateway id="afterSubscription" name="Cancelled?"/>
+      <sequenceFlow id="afterSubscriptionContinue" sourceRef="afterSubscription" targetRef="createUser">
+        <conditionExpression xsi:type="tFormalExpression">${!cancellationRequested}</conditionExpression>
+      </sequenceFlow>
+      <sequenceFlow id="afterSubscriptionCancel" sourceRef="afterSubscription" targetRef="recordCancellation">
+        <conditionExpression xsi:type="tFormalExpression">${cancellationRequested}</conditionExpression>
+      </sequenceFlow>
 
       <serviceTask id="createUser" name="Create user"
                    flowable:async="true"
@@ -69,7 +83,14 @@
       </boundaryEvent>
       <serviceTask id="undoCreateUser" name="Delete user" isForCompensation="true"
                    flowable:delegateExpression="${deleteUserDelegate}"/>
-      <sequenceFlow id="toReserveNumber" sourceRef="createUser" targetRef="reserveNumber"/>
+      <sequenceFlow id="createUserToCheck" sourceRef="createUser" targetRef="afterUser"/>
+      <exclusiveGateway id="afterUser" name="Cancelled?"/>
+      <sequenceFlow id="afterUserContinue" sourceRef="afterUser" targetRef="reserveNumber">
+        <conditionExpression xsi:type="tFormalExpression">${!cancellationRequested}</conditionExpression>
+      </sequenceFlow>
+      <sequenceFlow id="afterUserCancel" sourceRef="afterUser" targetRef="recordCancellation">
+        <conditionExpression xsi:type="tFormalExpression">${cancellationRequested}</conditionExpression>
+      </sequenceFlow>
 
       <serviceTask id="reserveNumber" name="Reserve phone number"
                    flowable:async="true"
@@ -80,7 +101,14 @@
       </boundaryEvent>
       <serviceTask id="undoReserveNumber" name="Release phone number" isForCompensation="true"
                    flowable:delegateExpression="${releaseNumberDelegate}"/>
-      <sequenceFlow id="toRequestActivation" sourceRef="reserveNumber" targetRef="requestActivation"/>
+      <sequenceFlow id="reserveNumberToCheck" sourceRef="reserveNumber" targetRef="afterNumber"/>
+      <exclusiveGateway id="afterNumber" name="Cancelled?"/>
+      <sequenceFlow id="afterNumberContinue" sourceRef="afterNumber" targetRef="requestActivation">
+        <conditionExpression xsi:type="tFormalExpression">${!cancellationRequested}</conditionExpression>
+      </sequenceFlow>
+      <sequenceFlow id="afterNumberCancel" sourceRef="afterNumber" targetRef="recordCancellation">
+        <conditionExpression xsi:type="tFormalExpression">${cancellationRequested}</conditionExpression>
+      </sequenceFlow>
 
       <!--
         The supplier can reject an activation outright - the number is already ported, the address
@@ -169,7 +197,14 @@
       </boundaryEvent>
       <serviceTask id="undoShipHardware" name="Cancel shipment" isForCompensation="true"
                    flowable:delegateExpression="${cancelShipmentDelegate}"/>
-      <sequenceFlow id="toWaitBeforePolling" sourceRef="shipHardware" targetRef="awaitDelivery"/>
+      <sequenceFlow id="shipHardwareToCheck" sourceRef="shipHardware" targetRef="afterShipment"/>
+      <exclusiveGateway id="afterShipment" name="Cancelled?"/>
+      <sequenceFlow id="afterShipmentContinue" sourceRef="afterShipment" targetRef="awaitDelivery">
+        <conditionExpression xsi:type="tFormalExpression">${!cancellationRequested}</conditionExpression>
+      </sequenceFlow>
+      <sequenceFlow id="afterShipmentCancel" sourceRef="afterShipment" targetRef="recordCancellation">
+        <conditionExpression xsi:type="tFormalExpression">${cancellationRequested}</conditionExpression>
+      </sequenceFlow>
 
       <!--
         Poll loop, wrapped in a subprocess so that a cancellation boundary event has something to
@@ -208,15 +243,21 @@
       <endEvent id="provisioned" name="Service provisioned"/>
 
       <!--
-        Cancellation by the client. It is caught on the two activities where the order actually
-        waits, and both routes lead to the transaction's own cancel end event - the only place from
-        which compensation runs.
+        Cancellation by the client, handled in two complementary ways so that it can be requested at
+        any moment and still unwind cleanly.
 
-        A boundary event on the transaction itself would be simpler to draw and useless in practice:
-        interrupting the transaction destroys the compensation subscriptions along with the scope,
-        so the unwind would find nothing to undo. Cancelling at the wait states is also the honest
-        model of the domain - those waits are hours and weeks long, and they are when a client
-        actually changes their mind.
+        The checkpoints above are the general mechanism: the intent is recorded on the order, every
+        step republishes it as a variable, and the gateway after each step routes to the unwind. A
+        cancellation arriving mid-provisioning is honoured at the next step boundary rather than
+        refused.
+
+        The boundary events below are the impatient half: while the order is parked waiting for a
+        callback or a handset, the next checkpoint could be a fortnight away, so the wait is
+        interrupted directly.
+
+        What neither does is put a boundary event on the transaction itself. That is simpler to draw
+        and useless in practice - interrupting the transaction destroys the compensation
+        subscriptions along with the scope, so the unwind would find nothing to undo.
       -->
       <boundaryEvent id="cancelDuringActivation" name="Cancelled during activation"
                      attachedToRef="awaitActivation" cancelActivity="true">

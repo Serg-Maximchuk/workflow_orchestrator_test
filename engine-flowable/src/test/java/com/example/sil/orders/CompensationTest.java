@@ -149,19 +149,45 @@ class CompensationTest extends AbstractOrderWorkflowTest {
     }
 
     @Test
-    @DisplayName("cancelling mid-provisioning is refused, because there is no safe point to unwind from")
-    void cancellingMidProvisioningIsRefused() throws Exception {
+    @DisplayName("cancelling mid-provisioning is accepted and unwinds at the next checkpoint")
+    void cancellingMidProvisioningUnwindsAtTheNextCheckpoint() throws Exception {
         String orderId = submitOrder();
+        executeNextJob();
+        executeNextJob();
 
-        // Submitted, durable, but the process is between supplier calls rather than waiting on one.
-        // Accepting a cancellation here would mean unwinding while a provisioning call is still in
-        // flight, and we would not know what it left behind.
+        // Two steps in, and the process is between supplier calls rather than parked on a wait -
+        // there is no engine subscription to deliver a cancellation to. It is still accepted,
+        // because the intent goes on the order and the checkpoint after the next step reads it.
+        mockMvc.perform(MockMvcRequestBuilders.post(ORDERS_URL + "/" + orderId + "/cancel"))
+                .andExpect(MockMvcResultMatchers.status().isAccepted());
+
+        executeAllJobs();
+
+        // The guarantee is "at most one more step", not "stops instantly": the step that was
+        // already queued when the client cancelled still runs, and the checkpoint after it is what
+        // catches the cancellation. So the user does get created - and is then undone.
+        assertThat(compensatingCallsInOrder())
+                .as("everything provisioned is undone, newest first, and nothing else is")
+                .containsExactly(
+                        "/supplier/v1/users/user-1",
+                        "/supplier/v1/subscriptions/sub-1",
+                        "/supplier/v1/customers/cust-1");
+        assertThat(fetchOrder(orderId).read("$.state", String.class)).isEqualTo("cancelled");
+
+        // And the journey stopped there: no number was ever reserved.
+        supplier.verify(exactly(0), postRequestedFor(urlPathEqualTo(NUMBERS_PATH)));
+    }
+
+    @Test
+    @DisplayName("cancelling an order that already finished is a 409")
+    void cancellingFinishedOrderIsRejected() throws Exception {
+        String orderId = submitOrder();
+        executeAllJobs();
+        completeActivationAndDelivery(orderId);
+
         mockMvc.perform(MockMvcRequestBuilders.post(ORDERS_URL + "/" + orderId + "/cancel"))
                 .andExpect(MockMvcResultMatchers.status().isConflict())
                 .andExpect(MockMvcResultMatchers.jsonPath("$.title").value("Order cannot be cancelled"));
-
-        assertThat(compensatingCallsInOrder()).isEmpty();
-        supplier.verify(exactly(0), postRequestedFor(urlPathEqualTo(CUSTOMERS_PATH)));
     }
 
     @Test
