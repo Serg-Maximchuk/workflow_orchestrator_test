@@ -1,0 +1,18 @@
+databaseChangeLog:
+  - changeSet:
+      id: 005-cancellation-requested
+      author: sil
+      comment: >-
+        The client's cancellation intent, kept on the order. A cancellation that arrives while a
+        provisioning call is in flight has no engine subscription to be delivered to, so it is
+        recorded here and acted on at the next checkpoint in the process.
+      changes:
+        - addColumn:
+            tableName: service_order
+            columns:
+              - column:
+                  name: cancellation_requested
+                  type: boolean
+                  defaultValueBoolean: false
+                  constraints:
+                    nullable: false

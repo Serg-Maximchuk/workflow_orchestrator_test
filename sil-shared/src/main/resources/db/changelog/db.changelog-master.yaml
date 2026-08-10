@@ -7,3 +7,5 @@ databaseChangeLog:
       file: db/changelog/002-service-order.yaml
   - include:
       file: db/changelog/003-async-fulfilment.yaml
+  - include:
+      file: db/changelog/004-cancellation.yaml

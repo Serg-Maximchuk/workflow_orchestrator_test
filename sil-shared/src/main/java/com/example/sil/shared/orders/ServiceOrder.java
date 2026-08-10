@@ -97,6 +97,14 @@ public class ServiceOrder {
     @Column(name = "reminders_sent", nullable = false)
     private int remindersSent;
 
+    /**
+     * The client has asked to cancel. Recorded on the order rather than only delivered to the
+     * engine, because a cancellation arriving mid-provisioning has nowhere to be delivered to -
+     * and losing it would mean the client's request silently did nothing.
+     */
+    @Column(name = "cancellation_requested", nullable = false)
+    private boolean cancellationRequested;
+
     @Column(name = "failure_reason", length = 500)
     private String failureReason;
 
@@ -204,6 +212,11 @@ public class ServiceOrder {
     public void shipmentCancelled() {
         this.supplierShipmentId = null;
         this.shipmentStatus = "cancelled";
+        touch();
+    }
+
+    public void cancellationRequested() {
+        this.cancellationRequested = true;
         touch();
     }
 
