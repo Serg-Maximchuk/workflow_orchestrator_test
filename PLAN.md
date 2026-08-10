@@ -187,7 +187,7 @@ must-have demo.
 - Covers: 5, 6, 7, 8, 9, 10, 14
 - **Artifact:** a test that drives the engine clock (no `Thread.sleep`)
 
-### Phase 4 — saga / compensation (1–2 days)
+### Phase 4 — saga / compensation (1–2 days) — DONE
 - Compensation handlers for every supplier step
 - Scenario: failure at `activateNumber` → `releaseNumber` → `deleteUser` → `deleteSubscription` →
   `deleteCustomer`

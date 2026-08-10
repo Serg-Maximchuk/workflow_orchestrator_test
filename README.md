@@ -58,18 +58,22 @@ flowchart LR
     C --> D[Create user]
     D --> E[Reserve phone number]
     E --> F[Request activation]
-    F -->|supplier rejects| X[Fail order]
+    F -->|supplier rejects| C{{Cancel: unwind}}
     F --> G[Await activation callback]
-    G -->|SLA breached| X
+    G -->|SLA breached| C
+    G -->|client cancels| C
     G -.->|every 30 min| R[Send reminder]
     G --> H[Ship hardware]
-    H --> W(["Wait, then poll"])
-    W --> P[Poll shipment status]
-    P -->|not delivered| W
-    P -->|delivered| Z[Complete order]
-    X --> XE([Order failed])
+    H --> W(["Await delivery: wait, poll, repeat"])
+    W -->|client cancels| C
+    W --> Z[Complete order]
+    C --> U[/"Compensate: undo every completed step, newest first"/]
+    U --> XE([Order failed / cancelled])
     Z --> ZE([Order completed])
 ```
+
+Everything from `Create customer` to `Await delivery` runs inside a BPMN **transaction subprocess**,
+which is what makes the unwind arrow above real rather than aspirational.
 
 Every service task is async, which is the point rather than an optimisation: each supplier call
 gets its own transaction boundary, so a failure at step three does not undo the two remote side
@@ -92,7 +96,22 @@ The unreliable half - the part a workflow engine exists for:
   non-interrupting timer sends reminders without taking the order off its wait; a poll loop sleeps
   between shipment checks, costing nothing but a database row while it waits
 
-Not yet: compensation and the restart demo. Those are Phases 4-5.
+The saga - because a database transaction cannot roll back a customer that now exists in the
+supplier's system:
+
+- every provisioning step has a compensating call attached to it in the model, and all of them run
+  **in reverse order** when fulfilment cannot finish
+- three ways in, one unwind path: the supplier rejects the activation, the SLA expires, or the
+  client calls `POST /serviceOrder/{id}/cancel`
+- the engine already knows how far the order got, so nothing has to answer "what did we do so far?"
+  at each failure point - the alternative, unwinding by hand in a catch block, has to answer it
+  everywhere
+- cancellation is accepted while the order waits on the supplier (the hours and weeks where a
+  client actually changes their mind) and refused with a 409 while a provisioning call is in flight
+- an order reaches `cancelled` only after the last undo has succeeded; the supplier references are
+  cleared as each one is undone
+
+Not yet: the restart demo, the outbox and clustering. That is Phase 5.
 
 ## Requirements
 

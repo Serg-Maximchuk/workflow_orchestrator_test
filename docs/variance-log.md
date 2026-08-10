@@ -34,6 +34,8 @@ Status values: **agreed** (accepted by the architect), **proposed** (raised, awa
 | V-016 | Order states limited to `acknowledged`, `inProgress`, `completed`, `failed`; TMF also defines `pending`, `held`, `assessingCancellation`, `pendingCancellation`, `cancelled`, `rejected`, `partial` | Only the states the current process can actually reach. Cancellation states arrive in Phase 4 with the cancel journey | temporary — revisit in Phase 4 |
 
 | V-017 | `POST /callbacks/voip/number-activation` is our own shape, not a TMF notification | The supplier is not TMF-aware. Correlation is on our order id, which we hand over as `callbackCorrelationId` when requesting activation | temporary — closes when the real supplier callback contract arrives |
+| V-019 | `POST /serviceOrder/{id}/cancel` is refused with 409 while a provisioning call is in flight; TMF models cancellation as a separate `CancelServiceOrder` resource with its own lifecycle | Cancellation is caught at the points where the order waits on the supplier, because those are the only points from which the saga can unwind safely. A full `CancelServiceOrder` resource is worth adding once there is a consumer for its states | proposed |
+| V-020 | Compensation clears the supplier references it undid rather than keeping them | An id that no longer exists at the supplier invites a later step, or an operator, to act on something that is gone. The history is not lost - the timeline still shows both the step and its compensation | agreed |
 | V-018 | `/admin/workflow/**` is outside TMF entirely | Support tooling, not a client-facing API. Kept separate so it can change without touching the TMF contract | agreed |
 
 ## Cross-cutting
