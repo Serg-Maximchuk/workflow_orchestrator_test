@@ -32,9 +32,17 @@ class EngineBootstrapH2Test {
     private RuntimeService runtimeService;
 
     @Test
-    @DisplayName("the engine boots on H2 with no process definitions deployed yet")
-    void engineBootsOnH2() {
-        assertThat(repositoryService.createProcessDefinitionQuery().count()).isZero();
-        assertThat(runtimeService.createProcessInstanceQuery().count()).isZero();
+    @DisplayName("auto-deploys the process definitions found on the classpath")
+    void deploysProcessDefinitionsOnStartup() {
+        assertThat(repositoryService.createProcessDefinitionQuery()
+                .processDefinitionKey("serviceOrder")
+                .latestVersion()
+                .singleResult())
+                .as("every BPMN file under resources/processes should be deployed at startup")
+                .isNotNull();
+
+        assertThat(runtimeService.createProcessInstanceQuery().count())
+                .as("deploying a definition must not start anything by itself")
+                .isZero();
     }
 }
