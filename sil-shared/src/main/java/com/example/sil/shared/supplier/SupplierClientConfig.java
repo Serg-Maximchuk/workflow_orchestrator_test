@@ -3,6 +3,7 @@ package com.example.sil.shared.supplier;
 import com.example.sil.shared.correlation.CorrelationContext;
 import com.example.sil.shared.correlation.CorrelationIdFilter;
 import java.net.http.HttpClient;
+import java.util.Optional;
 import org.springframework.boot.context.properties.EnableConfigurationProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -52,13 +53,13 @@ public class SupplierClientConfig {
             SupplierProperties properties, OAuth2AuthorizedClientManager authorizedClientManager) {
 
         HttpClient httpClient = HttpClient.newBuilder()
-                .connectTimeout(properties.getConnectTimeout())
+                .connectTimeout(properties.connectTimeout())
                 .build();
         JdkClientHttpRequestFactory requestFactory = new JdkClientHttpRequestFactory(httpClient);
-        requestFactory.setReadTimeout(properties.getReadTimeout());
+        requestFactory.setReadTimeout(properties.readTimeout());
 
         return RestClient.builder()
-                .baseUrl(properties.getBaseUrl())
+                .baseUrl(properties.baseUrl())
                 .requestFactory(requestFactory)
                 .requestInterceptor((request, body, execution) -> {
                     request.getHeaders()
@@ -70,17 +71,17 @@ public class SupplierClientConfig {
                 .build();
     }
 
-    private java.util.Optional<String> accessToken(
+    private Optional<String> accessToken(
             OAuth2AuthorizedClientManager manager, SupplierProperties properties) {
 
         OAuth2AuthorizeRequest request = OAuth2AuthorizeRequest
-                .withClientRegistrationId(properties.getClientRegistrationId())
-                .principal(properties.getClientRegistrationId())
+                .withClientRegistrationId(properties.clientRegistrationId())
+                .principal(properties.clientRegistrationId())
                 .build();
 
         OAuth2AuthorizedClient client = manager.authorize(request);
-        return java.util.Optional.ofNullable(client)
+        return Optional.ofNullable(client)
                 .map(OAuth2AuthorizedClient::getAccessToken)
-                .map(token -> token.getTokenValue());
+                .map(org.springframework.security.oauth2.core.OAuth2AccessToken::getTokenValue);
     }
 }
