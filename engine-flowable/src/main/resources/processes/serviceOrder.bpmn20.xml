@@ -2,9 +2,6 @@
 <definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
              xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
              xmlns:flowable="http://flowable.org/bpmn"
-             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
-             xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
-             xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI"
              targetNamespace="http://example.com/sil">
 
   <!--
@@ -18,13 +15,14 @@
       1. Each supplier call gets its own transaction boundary. A failure while creating the user
          does not undo the customer and subscription that were already created at the supplier -
          which would be impossible to undo anyway, since a remote side effect is not transactional.
-      2. Each task gets its own retry counter (Phase 3). Retries live in the database, so they
-         survive this application being restarted.
+      2. Each task gets its own retry counter. failedJobRetryTimeCycle below is stored in the
+         database, so retries survive this application being restarted - the one thing an
+         in-process retry loop can never do.
       3. The submitting HTTP request returns as soon as the order is durable, without waiting for
          any supplier at all.
 
-    exclusive="true" (the default) keeps the jobs of one process instance from running
-    concurrently, so the delegates below can read and write the same order row without fighting.
+    The retry cycles are short here so the tests stay readable. Real values would back off much
+    further; the shape (R<attempts>/PT<interval>) is what matters.
   -->
   <process id="serviceOrder" name="VOIP Service Order Fulfilment" isExecutable="true">
 
@@ -33,79 +31,142 @@
 
     <serviceTask id="createCustomer" name="Create customer"
                  flowable:async="true"
+                 flowable:failedJobRetryTimeCycle="R3/PT10S"
                  flowable:delegateExpression="${createCustomerDelegate}"/>
     <sequenceFlow id="toCreateSubscription" sourceRef="createCustomer" targetRef="createSubscription"/>
 
     <serviceTask id="createSubscription" name="Create subscription"
                  flowable:async="true"
+                 flowable:failedJobRetryTimeCycle="R3/PT10S"
                  flowable:delegateExpression="${createSubscriptionDelegate}"/>
     <sequenceFlow id="toCreateUser" sourceRef="createSubscription" targetRef="createUser"/>
 
     <serviceTask id="createUser" name="Create user"
                  flowable:async="true"
+                 flowable:failedJobRetryTimeCycle="R3/PT10S"
                  flowable:delegateExpression="${createUserDelegate}"/>
     <sequenceFlow id="toReserveNumber" sourceRef="createUser" targetRef="reserveNumber"/>
 
     <serviceTask id="reserveNumber" name="Reserve phone number"
                  flowable:async="true"
+                 flowable:failedJobRetryTimeCycle="R3/PT10S"
                  flowable:delegateExpression="${reserveNumberDelegate}"/>
-    <sequenceFlow id="toCompleteOrder" sourceRef="reserveNumber" targetRef="completeOrder"/>
+    <sequenceFlow id="toRequestActivation" sourceRef="reserveNumber" targetRef="requestActivation"/>
+
+    <!--
+      The supplier can reject an activation outright - the number is already ported, the address
+      does not match. That is a business answer, not a technical fault, and the delegate raises it
+      as a BPMN error rather than an exception. The difference is everything: an exception means
+      "try again, this might work", a BPMN error means "this will never work, take another path".
+      Retrying a rejection four times just annoys the supplier and delays telling the customer.
+    -->
+    <serviceTask id="requestActivation" name="Request number activation"
+                 flowable:async="true"
+                 flowable:failedJobRetryTimeCycle="R3/PT10S"
+                 flowable:delegateExpression="${requestActivationDelegate}"/>
+    <boundaryEvent id="activationRejected" name="Rejected by supplier" attachedToRef="requestActivation">
+      <errorEventDefinition errorRef="SUPPLIER_REJECTED"/>
+    </boundaryEvent>
+    <sequenceFlow id="rejectedToFail" sourceRef="activationRejected" targetRef="failOrder"/>
+    <sequenceFlow id="toAwaitActivation" sourceRef="requestActivation" targetRef="awaitActivation"/>
+
+    <!--
+      Waiting for the supplier's callback. The wait is wrapped in a subprocess purely so timers can
+      be attached to it: boundary events attach to activities, and a bare message catch event is
+      not one.
+    -->
+    <subProcess id="awaitActivation" name="Await activation callback">
+      <startEvent id="waitStarted"/>
+      <sequenceFlow id="waitToMessage" sourceRef="waitStarted" targetRef="activationCallback"/>
+      <intermediateCatchEvent id="activationCallback" name="Number activated">
+        <messageEventDefinition messageRef="numberActivated"/>
+      </intermediateCatchEvent>
+      <sequenceFlow id="messageToWaitEnd" sourceRef="activationCallback" targetRef="waitEnded"/>
+      <endEvent id="waitEnded"/>
+    </subProcess>
+
+    <!--
+      Interrupting boundary timer: the supplier promised an answer within the SLA and did not
+      deliver one. The token is taken off the wait and the order fails - a stuck order that nobody
+      notices is worse than a failed one that somebody does.
+    -->
+    <boundaryEvent id="activationSlaBreached" name="Activation SLA breached"
+                   attachedToRef="awaitActivation" cancelActivity="true">
+      <timerEventDefinition>
+        <timeDuration>PT2H</timeDuration>
+      </timerEventDefinition>
+    </boundaryEvent>
+    <sequenceFlow id="slaToTimeout" sourceRef="activationSlaBreached" targetRef="activationTimedOut"/>
+    <serviceTask id="activationTimedOut" name="Record activation timeout"
+                 flowable:async="true"
+                 flowable:delegateExpression="${activationTimedOutDelegate}"/>
+    <sequenceFlow id="timeoutToFail" sourceRef="activationTimedOut" targetRef="failOrder"/>
+
+    <!--
+      Non-interrupting boundary timer, repeating: keep the customer informed while we wait. The
+      token stays on the wait - cancelActivity="false" is what makes this a side effect rather than
+      a detour - and the cycle fires up to three times.
+    -->
+    <boundaryEvent id="activationReminder" name="Remind customer"
+                   attachedToRef="awaitActivation" cancelActivity="false">
+      <timerEventDefinition>
+        <timeCycle>R3/PT30M</timeCycle>
+      </timerEventDefinition>
+    </boundaryEvent>
+    <sequenceFlow id="reminderToSend" sourceRef="activationReminder" targetRef="sendReminder"/>
+    <serviceTask id="sendReminder" name="Send progress reminder"
+                 flowable:async="true"
+                 flowable:delegateExpression="${sendReminderDelegate}"/>
+    <sequenceFlow id="reminderToEnd" sourceRef="sendReminder" targetRef="reminderSent"/>
+    <endEvent id="reminderSent" name="Reminder sent"/>
+
+    <sequenceFlow id="toShipHardware" sourceRef="awaitActivation" targetRef="shipHardware"/>
+
+    <serviceTask id="shipHardware" name="Ship hardware"
+                 flowable:async="true"
+                 flowable:failedJobRetryTimeCycle="R3/PT10S"
+                 flowable:delegateExpression="${shipHardwareDelegate}"/>
+    <sequenceFlow id="toWaitBeforePolling" sourceRef="shipHardware" targetRef="waitBeforePolling"/>
+
+    <!--
+      Poll loop. Shipping takes days to weeks, and the supplier offers no callback for it, so the
+      process sleeps on a timer and asks again. While it sleeps it costs nothing but a row in
+      ACT_RU_TIMER_JOB - no thread, no memory, and it resumes after a restart.
+    -->
+    <intermediateCatchEvent id="waitBeforePolling" name="Wait before polling">
+      <timerEventDefinition>
+        <timeDuration>${shipmentPollDelay}</timeDuration>
+      </timerEventDefinition>
+    </intermediateCatchEvent>
+    <sequenceFlow id="toPollShipment" sourceRef="waitBeforePolling" targetRef="pollShipment"/>
+
+    <serviceTask id="pollShipment" name="Poll shipment status"
+                 flowable:async="true"
+                 flowable:failedJobRetryTimeCycle="R3/PT10S"
+                 flowable:delegateExpression="${pollShipmentDelegate}"/>
+    <sequenceFlow id="toDeliveredGateway" sourceRef="pollShipment" targetRef="deliveredGateway"/>
+
+    <exclusiveGateway id="deliveredGateway" name="Delivered?"/>
+    <sequenceFlow id="notDeliveredYet" sourceRef="deliveredGateway" targetRef="waitBeforePolling">
+      <conditionExpression xsi:type="tFormalExpression">${!shipmentDelivered}</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="deliveredToComplete" sourceRef="deliveredGateway" targetRef="completeOrder">
+      <conditionExpression xsi:type="tFormalExpression">${shipmentDelivered}</conditionExpression>
+    </sequenceFlow>
 
     <serviceTask id="completeOrder" name="Complete order"
                  flowable:async="true"
                  flowable:delegateExpression="${completeOrderDelegate}"/>
     <sequenceFlow id="toOrderCompleted" sourceRef="completeOrder" targetRef="orderCompleted"/>
-
     <endEvent id="orderCompleted" name="Order completed"/>
+
+    <serviceTask id="failOrder" name="Fail order"
+                 flowable:async="true"
+                 flowable:delegateExpression="${failOrderDelegate}"/>
+    <sequenceFlow id="toOrderFailed" sourceRef="failOrder" targetRef="orderFailed"/>
+    <endEvent id="orderFailed" name="Order failed"/>
   </process>
 
-  <bpmndi:BPMNDiagram id="serviceOrderDiagram">
-    <bpmndi:BPMNPlane id="serviceOrderPlane" bpmnElement="serviceOrder">
-      <bpmndi:BPMNShape id="s_orderSubmitted" bpmnElement="orderSubmitted">
-        <omgdc:Bounds x="100" y="100" width="30" height="30"/>
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="s_createCustomer" bpmnElement="createCustomer">
-        <omgdc:Bounds x="180" y="75" width="120" height="80"/>
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="s_createSubscription" bpmnElement="createSubscription">
-        <omgdc:Bounds x="350" y="75" width="120" height="80"/>
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="s_createUser" bpmnElement="createUser">
-        <omgdc:Bounds x="520" y="75" width="120" height="80"/>
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="s_reserveNumber" bpmnElement="reserveNumber">
-        <omgdc:Bounds x="690" y="75" width="120" height="80"/>
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="s_completeOrder" bpmnElement="completeOrder">
-        <omgdc:Bounds x="860" y="75" width="120" height="80"/>
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNShape id="s_orderCompleted" bpmnElement="orderCompleted">
-        <omgdc:Bounds x="1030" y="100" width="30" height="30"/>
-      </bpmndi:BPMNShape>
-      <bpmndi:BPMNEdge id="e_toCreateCustomer" bpmnElement="toCreateCustomer">
-        <omgdi:waypoint x="130" y="115"/>
-        <omgdi:waypoint x="180" y="115"/>
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="e_toCreateSubscription" bpmnElement="toCreateSubscription">
-        <omgdi:waypoint x="300" y="115"/>
-        <omgdi:waypoint x="350" y="115"/>
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="e_toCreateUser" bpmnElement="toCreateUser">
-        <omgdi:waypoint x="470" y="115"/>
-        <omgdi:waypoint x="520" y="115"/>
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="e_toReserveNumber" bpmnElement="toReserveNumber">
-        <omgdi:waypoint x="640" y="115"/>
-        <omgdi:waypoint x="690" y="115"/>
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="e_toCompleteOrder" bpmnElement="toCompleteOrder">
-        <omgdi:waypoint x="810" y="115"/>
-        <omgdi:waypoint x="860" y="115"/>
-      </bpmndi:BPMNEdge>
-      <bpmndi:BPMNEdge id="e_toOrderCompleted" bpmnElement="toOrderCompleted">
-        <omgdi:waypoint x="980" y="115"/>
-        <omgdi:waypoint x="1030" y="115"/>
-      </bpmndi:BPMNEdge>
-    </bpmndi:BPMNPlane>
-  </bpmndi:BPMNDiagram>
+  <message id="numberActivated" name="numberActivated"/>
+  <error id="SUPPLIER_REJECTED" errorCode="SUPPLIER_REJECTED"/>
 </definitions>

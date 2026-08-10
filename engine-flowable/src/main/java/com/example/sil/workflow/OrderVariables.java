@@ -16,5 +16,11 @@ public final class OrderVariables {
     /** Correlation id of the request that submitted the order, for logging on job threads. */
     public static final String CORRELATION_ID = "correlationId";
 
+    /** Read by the gateway that decides whether the shipment poll loop goes round again. */
+    public static final String SHIPMENT_DELIVERED = "shipmentDelivered";
+
+    /** How long the process sleeps between shipment polls; read by the timer in the model. */
+    public static final String SHIPMENT_POLL_DELAY = "shipmentPollDelay";
+
     private OrderVariables() {}
 }
