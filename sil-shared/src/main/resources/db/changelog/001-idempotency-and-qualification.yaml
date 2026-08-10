@@ -1,0 +1,88 @@
+databaseChangeLog:
+  - changeSet:
+      id: 001-idempotency-record
+      author: sil
+      comment: >-
+        The primary key is the idempotency key itself. That is what makes duplicate suppression a
+        database guarantee rather than a check-then-act race in application code.
+      changes:
+        - createTable:
+            tableName: idempotency_record
+            columns:
+              - column:
+                  name: idempotency_key
+                  type: varchar(200)
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: request_fingerprint
+                  type: varchar(64)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: resource_id
+                  type: varchar(100)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: response_status
+                  type: int
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamp
+                  constraints:
+                    nullable: false
+
+  - changeSet:
+      id: 002-service-qualification
+      author: sil
+      changes:
+        - createTable:
+            tableName: service_qualification
+            columns:
+              - column:
+                  name: id
+                  type: varchar(50)
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: external_id
+                  type: varchar(100)
+              - column:
+                  name: postcode
+                  type: varchar(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: service_spec_id
+                  type: varchar(60)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: qualification_result
+                  type: varchar(30)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: max_speed_mbps
+                  type: int
+              - column:
+                  name: correlation_id
+                  type: varchar(60)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamp
+                  constraints:
+                    nullable: false
+        - createIndex:
+            tableName: service_qualification
+            indexName: idx_service_qualification_correlation
+            columns:
+              - column:
+                  name: correlation_id
