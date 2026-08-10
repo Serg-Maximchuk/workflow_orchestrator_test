@@ -30,6 +30,13 @@ jobs:
         with:
           name: fast-test-reports
           path: '**/build/reports/tests/test'
+      # The generated API contract, so a change to it is visible as a diff in review rather
+      # than being discovered by whoever integrates against it.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: openapi
+          path: engine-flowable/build/openapi.json
 
   # Slow lane: the same suite against a real Postgres started by Testcontainers.
   # Everything that depends on real row locking (job executor, retries, timers) lives here.
