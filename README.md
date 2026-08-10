@@ -18,8 +18,31 @@ end up implemented several times, side by side, so the implementations can be co
 
 | Module | Engine | Model | Status |
 |---|---|---|---|
-| [`engine-flowable`](engine-flowable) | Flowable 8, embedded | BPMN 2.0, engine inside the Spring context, state in the app's own Postgres | Phase 0 done |
+| [`engine-flowable`](engine-flowable) | Flowable 8, embedded | BPMN 2.0, engine inside the Spring context, state in the app's own Postgres | Phases 0-1 done |
 | `engine-camunda8` | Camunda 8 / Zeebe | BPMN 2.0, remote broker, job workers | planned |
+
+Engine-agnostic code - the TMF APIs, the supplier adapter, idempotency and correlation - lives in
+[`sil-shared`](sil-shared), so adding an engine means adding process definitions and their glue,
+not a second copy of the API.
+
+## What works today
+
+TMF645 Service Qualification, end to end and synchronous:
+
+- `POST /tmf-api/serviceQualification/v5/checkServiceQualification` calls the supplier and stores
+  the answer; `GET .../{id}` returns it later
+- retrying with the same `Idempotency-Key` replays the first answer and does **not** call the
+  supplier again; reusing the key with a different body is a 409
+- `X-Correlation-Id` is echoed to the caller, written to every log line, forwarded to the supplier
+  and stored with the result
+- the supplier call has connect and read timeouts, bounded retry with exponential backoff, and a
+  circuit breaker; a supplier outage becomes a 503 rather than a hung thread
+- outbound calls carry an OAuth2 client-credentials token, fetched once and reused
+- OpenAPI at `/v3/api-docs`, Swagger UI at `/swagger-ui.html`, deviations from TMF recorded in
+  [docs/variance-log.md](docs/variance-log.md)
+
+Not yet: any workflow. That starts in Phase 2, and the retrying and state ownership move into the
+engine with it.
 
 ## Requirements
 
@@ -75,8 +98,10 @@ Everything at once:
 ├── PLAN.md                 # phase-by-phase plan and the feature/test matrix
 ├── CLAUDE.md               # working rules for this repo
 ├── docker-compose.yml      # postgres + wiremock + rabbitmq
+├── sil-shared/             # TMF APIs, supplier adapter, idempotency, correlation
 ├── engine-flowable/        # Service Integration Layer on an embedded Flowable engine
 ├── stubs/                  # WireMock mappings standing in for supplier APIs
+├── postman/                # collection for poking at the API by hand
 ├── docs/                   # architecture, variance log, recovery demo, engine comparison
 └── .github/workflows/ci.yml
 ```

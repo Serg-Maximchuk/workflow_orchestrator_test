@@ -158,14 +158,14 @@ must-have demo.
 
 ## 4. Phases
 
-### Phase 0 — skeleton (half a day)
+### Phase 0 — skeleton (half a day) — DONE
 - Gradle multi-module: `sil-api`, `sil-core` (a single module is fine too — do not over-engineer)
 - `docker-compose.yml`: postgres, wiremock, rabbitmq (or localstack), optionally flowable-ui
 - Spring Boot with the Flowable starter comes up, `ACT_*` tables created
 - Health-check test using Testcontainers
 - **Artifact:** `./gradlew test` green locally
 
-### Phase 1 — synchronous path, no process yet (half a day)
+### Phase 1 — synchronous path, no process yet (half a day) — DONE
 - TMF645 Service Qualification: REST → supplier `checkAvailability` (WireMock) → response
 - OpenAPI generated, Idempotency-Key, correlation-ID filter, timeouts, Resilience4j retry
 - Covers items: 11, 12, 19, 20, 27, 28
