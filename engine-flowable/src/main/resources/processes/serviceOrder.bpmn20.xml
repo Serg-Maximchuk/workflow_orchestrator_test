@@ -246,6 +246,21 @@
 
 
       <!--
+        Compensation handlers are deliberately NOT flowable:async. Marking them async stops the
+        unwind happening at all - the transaction tears down before the queued handler jobs run,
+        and nothing is undone. Synchronous handlers also give the unwind its ordering guarantee:
+        the whole reverse sequence runs inside the single job that reached the cancel end event.
+
+        The retry story comes from that job. If one undo fails, the job fails and is retried, which
+        re-runs the handlers from the beginning - so every handler has to be idempotent.
+
+        And idempotent at the supplier, not just here. Each handler clears the reference it undid
+        and no-ops when it is already gone, but that bookkeeping is rolled back along with the
+        failed job, while the DELETE it already sent is not. A retry therefore asks the supplier to
+        undo something it has already undone. CompensationRetryTest pins both halves down.
+      -->
+
+      <!--
         Associations bind each compensation boundary event to its handler. They live down here
         rather than beside the tasks they belong to because the BPMN schema classifies them as
         artifacts, and artifacts must follow every flow element in their container.
