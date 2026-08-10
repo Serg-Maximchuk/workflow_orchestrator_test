@@ -1,0 +1,90 @@
+# Service Integration Layer — workflow engine playground
+
+A learning project built around workflow orchestration: a telecom **Service Integration Layer**
+that drives VOIP and hardware order journeys between a commercial order management system and
+downstream suppliers, implemented on top of a BPMN engine.
+
+The point is not the telecom domain — it is to hit, with tests, every orchestration concern that
+shows up in real integration work: long-running processes, timers, retries, dead letters,
+compensation (saga), idempotency, correlation IDs, transactional outbox, and clean recovery after a
+mid-process restart.
+
+The full breakdown lives in [PLAN.md](PLAN.md).
+
+## Engines
+
+Each engine gets its own module and **none replaces another** — the same order journey is meant to
+end up implemented several times, side by side, so the implementations can be compared directly.
+
+| Module | Engine | Model | Status |
+|---|---|---|---|
+| [`engine-flowable`](engine-flowable) | Flowable 7, embedded | BPMN 2.0, engine inside the Spring context, state in the app's own Postgres | Phase 0 done |
+| `engine-camunda8` | Camunda 8 / Zeebe | BPMN 2.0, remote broker, job workers | planned |
+
+## Requirements
+
+- JDK 21+ (the Gradle toolchain pins the build to 21; a newer JDK on the machine is fine)
+- Docker (integration tests and the local stack)
+
+## Running
+
+Start the local stack — Postgres, WireMock (supplier stubs), RabbitMQ:
+
+```bash
+docker compose up -d
+```
+
+Run the Flowable application:
+
+```bash
+./gradlew :engine-flowable:bootRun
+```
+
+Health check:
+
+```bash
+curl -s localhost:8080/actuator/health
+```
+
+## Tests
+
+Two lanes, mirroring the two CI jobs.
+
+Fast — unit and BPMN process tests on in-memory H2, no Docker needed:
+
+```bash
+./gradlew test
+```
+
+Integration — the same engine against a real Postgres via Testcontainers:
+
+```bash
+./gradlew integrationTest
+```
+
+Everything at once:
+
+```bash
+./gradlew build
+```
+
+## Layout
+
+```
+.
+├── PLAN.md                 # phase-by-phase plan and the feature/test matrix
+├── CLAUDE.md               # working rules for this repo
+├── docker-compose.yml      # postgres + wiremock + rabbitmq
+├── engine-flowable/        # Service Integration Layer on an embedded Flowable engine
+├── stubs/                  # WireMock mappings standing in for supplier APIs
+├── docs/                   # architecture, variance log, recovery demo, engine comparison
+└── .github/workflows/ci.yml
+```
+
+## Notes
+
+- Spring Boot is pinned to 3.5.x on purpose: Flowable 7.1.0 is built against Spring Boot 3.3/3.4
+  and its auto-configuration does not work on Spring Boot 4 yet.
+- Flowable manages its own `ACT_*` schema in the same database as the business data. That
+  co-location — process state and business state in one transaction — is the main reason this
+  project starts with an embedded engine rather than a remote broker.
