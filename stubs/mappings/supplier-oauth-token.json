@@ -1,0 +1,16 @@
+{
+  "name": "OAuth2 client credentials token endpoint",
+  "request": {
+    "method": "POST",
+    "urlPath": "/supplier/oauth/token"
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": {
+      "access_token": "stub-supplier-access-token",
+      "token_type": "Bearer",
+      "expires_in": 3600
+    }
+  }
+}

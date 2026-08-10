@@ -1,0 +1,20 @@
+{
+  "name": "Availability check - service available",
+  "priority": 5,
+  "request": {
+    "method": "POST",
+    "urlPath": "/supplier/v1/availability",
+    "bodyPatterns": [
+      { "matchesJsonPath": "$.postcode" }
+    ]
+  },
+  "response": {
+    "status": 200,
+    "headers": { "Content-Type": "application/json" },
+    "jsonBody": {
+      "available": true,
+      "offeredServiceSpecIds": ["VOIP_BUSINESS", "VOIP_RESIDENTIAL"],
+      "maxSpeedMbps": 900
+    }
+  }
+}
