@@ -3,16 +3,15 @@ plugins {
     id("io.spring.dependency-management")
 }
 
-description = "Telecom Service Integration Layer on an embedded Flowable 7 engine"
+description = "Telecom Service Integration Layer on an embedded Flowable 8 engine"
 
-// Spring Boot 3.5.x is pinned deliberately: Flowable 7.1.0 is built against Spring Boot 3.3/3.4
-// and its auto-configuration does not yet work on Spring Boot 4 (Spring Framework 7).
-// Java 21 (set in the root build) for the same reason - the toolchain stays inside the range both
-// projects support, even though the machine has JDK 25 installed.
-val flowableVersion = "7.1.0"
+// Flowable 8.0.0 is built against Spring Boot 4.0.x / Spring Framework 7, which is what makes the
+// Spring Boot 4.1.0 baseline above possible. Anything on the Flowable 7.x line would force the
+// build back down to Spring Boot 3.x.
+val flowableVersion = "8.0.0"
 
 dependencies {
-    implementation("org.springframework.boot:spring-boot-starter-web")
+    implementation("org.springframework.boot:spring-boot-starter-webmvc")
     implementation("org.springframework.boot:spring-boot-starter-actuator")
     implementation("org.springframework.boot:spring-boot-starter-data-jpa")
     implementation("org.springframework.boot:spring-boot-starter-validation")
@@ -25,8 +24,8 @@ dependencies {
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
-    testImplementation("org.testcontainers:junit-jupiter")
-    testImplementation("org.testcontainers:postgresql")
+    testImplementation("org.testcontainers:testcontainers-junit-jupiter")
+    testImplementation("org.testcontainers:testcontainers-postgresql")
     // In-memory database for fast BPMN process tests that do not need real Postgres.
     testRuntimeOnly("com.h2database:h2")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
