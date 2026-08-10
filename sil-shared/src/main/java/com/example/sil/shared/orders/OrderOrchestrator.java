@@ -34,16 +34,18 @@ public interface OrderOrchestrator {
     void notifyNumberActivated(String orderId, boolean activated, String reason);
 
     /**
-     * Asks fulfilment to stop and undo whatever it has already provisioned.
+     * Nudges a fulfilment that is parked on a long wait to notice a cancellation now rather than
+     * whenever the wait ends.
      *
-     * <p>Returns as soon as the request is accepted, not once the unwinding is finished:
-     * compensation is itself a series of supplier calls that can be slow, fail and be retried.
-     * Callers watch the order state to learn when it is actually done.
+     * <p>Purely an optimisation, and the caller treats it as one. The cancellation itself is
+     * recorded on the order, and the process checks that at every checkpoint - so an order that is
+     * mid-provisioning when the client cancels still unwinds, just at the next safe point instead
+     * of immediately. Without this nudge an order waiting weeks for a handset would keep waiting.
      *
-     * @throws OrderNotCancellableException when fulfilment is no longer running - already
-     *     completed, already failed, already cancelled
+     * @return true if a waiting fulfilment was interrupted, false if there was nothing parked
+     * @throws OrderNotCancellableException when fulfilment is no longer running at all
      */
-    void cancelOrderFulfilment(String orderId);
+    boolean interruptWaitForCancellation(String orderId);
 
     /**
      * What has happened to this order so far, newest step last. Read from the engine's own history,

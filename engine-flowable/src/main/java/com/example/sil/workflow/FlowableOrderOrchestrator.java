@@ -64,7 +64,8 @@ public class FlowableOrderOrchestrator implements OrderOrchestrator {
                         // Initialised up front so the gateway after compensation can read it even
                         // when nothing ever set it. An unset variable there would be an error, and
                         // an error on the unwind path is the worst possible place for one.
-                        OrderVariables.CANCELLED_BY_CLIENT, false));
+                        OrderVariables.CANCELLED_BY_CLIENT, false,
+                        OrderVariables.CANCELLATION_REQUESTED, false));
 
         log.info("Started {} instance {} for order {}",
                 PROCESS_DEFINITION_KEY, instance.getId(), order.getId());
@@ -100,7 +101,7 @@ public class FlowableOrderOrchestrator implements OrderOrchestrator {
     }
 
     @Override
-    public void cancelOrderFulfilment(String orderId) {
+    public boolean interruptWaitForCancellation(String orderId) {
         ProcessInstance instance = runtimeService.createProcessInstanceQuery()
                 .processInstanceBusinessKey(orderId)
                 .singleResult();
@@ -112,16 +113,23 @@ public class FlowableOrderOrchestrator implements OrderOrchestrator {
                 .messageEventSubscriptionName(CANCEL_ORDER_MESSAGE)
                 .singleResult();
 
-        if (waiting == null) {
-            // Cancellation is caught where the order waits on the supplier. In between - while a
-            // provisioning call is actually in flight - there is nothing subscribed, and honestly
-            // there is nothing sensible to do either: the call has to land before we know what
-            // there is to undo.
+        if (instance == null) {
+            // Fulfilment already reached an end state. Cancelling then is not a no-op to be
+            // swallowed: the caller believes work is in flight.
             throw new OrderNotCancellableException(orderId);
         }
 
-        log.info("Cancelling fulfilment of order {}", orderId);
+        if (waiting == null) {
+            // Mid-provisioning: nothing is subscribed, and there is nothing sensible to interrupt
+            // either - the call in flight has to land before we know what there is to undo. The
+            // checkpoint after it will see the recorded intent.
+            log.info("Order {} is not parked on a wait; it will unwind at its next checkpoint", orderId);
+            return false;
+        }
+
+        log.info("Interrupting the wait of order {} to cancel it", orderId);
         runtimeService.messageEventReceived(CANCEL_ORDER_MESSAGE, waiting.getId());
+        return true;
     }
 
     @Override

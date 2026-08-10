@@ -36,6 +36,13 @@ abstract class AbstractOrderDelegate implements JavaDelegate {
                     new IllegalStateException("Order " + orderId + " is gone while its workflow runs"));
             executeStep(order, execution);
             orders.save(order);
+
+            // Republished after every step so the checkpoint gateway that follows reads a value
+            // that is at most one step old. The client can cancel at any moment, including while
+            // this very call was in flight, and the intent lands on the order rather than on the
+            // process - so this is where the two meet.
+            execution.setVariable(
+                    OrderVariables.CANCELLATION_REQUESTED, order.isCancellationRequested());
         } finally {
             MDC.remove(CorrelationIdFilter.MDC_KEY);
         }

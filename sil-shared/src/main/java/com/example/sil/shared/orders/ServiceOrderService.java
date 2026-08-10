@@ -67,15 +67,26 @@ public class ServiceOrderService {
     }
 
     /**
-     * Requests cancellation. The order is not cancelled when this returns - it is cancelled once
-     * compensation has undone everything provisioned so far, which the process drives on its own.
+     * Requests cancellation, and always accepts it while fulfilment is still running.
+     *
+     * <p>The intent is written to the order first. That is what makes the request safe to accept at
+     * any moment: the process checks it at every checkpoint, so a cancellation arriving while a
+     * provisioning call is in flight is honoured at the next safe point rather than rejected. The
+     * nudge afterwards only matters when the order is parked on a long wait, where nobody wants to
+     * sit out the remaining fortnight before the cancellation is noticed.
+     *
+     * <p>The order is not cancelled when this returns - it is cancelled once compensation has
+     * undone everything provisioned so far.
      */
     @Transactional
     public ServiceOrderResponse requestCancellation(String orderId) {
         ServiceOrder order = repository.findById(orderId)
                 .orElseThrow(() -> new ServiceOrderNotFoundException(orderId));
 
-        orchestrator.cancelOrderFulfilment(order.getId());
+        order.cancellationRequested();
+        repository.saveAndFlush(order);
+
+        orchestrator.interruptWaitForCancellation(order.getId());
         return toResponse(order);
     }
 

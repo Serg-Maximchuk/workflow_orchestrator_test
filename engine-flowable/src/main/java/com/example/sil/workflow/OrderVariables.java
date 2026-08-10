@@ -23,6 +23,12 @@ public final class OrderVariables {
     public static final String SHIPMENT_POLL_DELAY = "shipmentPollDelay";
 
     /**
+     * Whether the client has asked to cancel, refreshed from the order after every step and read
+     * by the checkpoint gateway that follows it.
+     */
+    public static final String CANCELLATION_REQUESTED = "cancellationRequested";
+
+    /**
      * Whether the unwind was requested by the client rather than caused by a failure. Read by the
      * gateway after compensation, which is the point where the original cause is no longer known.
      */
