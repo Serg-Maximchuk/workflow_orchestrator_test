@@ -14,7 +14,10 @@ public enum ServiceOrderState {
 
     COMPLETED("completed"),
 
-    FAILED("failed");
+    FAILED("failed"),
+
+    /** Cancelled by the client. Reached only after everything provisioned so far was undone. */
+    CANCELLED("cancelled");
 
     private final String tmfName;
 

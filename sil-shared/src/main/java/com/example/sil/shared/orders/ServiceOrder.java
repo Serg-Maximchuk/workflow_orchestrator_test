@@ -171,6 +171,47 @@ public class ServiceOrder {
         touch();
     }
 
+    // Compensation clears the reference it undid. A supplier id that no longer exists at the
+    // supplier is worse than no id: it invites a later step, or an operator, to act on something
+    // that is gone. What happened is not lost - the timeline still shows both the step and its
+    // compensation.
+    public void customerDeleted() {
+        this.supplierCustomerId = null;
+        touch();
+    }
+
+    public void subscriptionDeleted() {
+        this.supplierSubscriptionId = null;
+        touch();
+    }
+
+    public void userDeleted() {
+        this.supplierUserId = null;
+        touch();
+    }
+
+    public void numberReleased() {
+        this.phoneNumber = null;
+        touch();
+    }
+
+    public void activationCancelled() {
+        this.supplierActivationId = null;
+        this.numberActivated = false;
+        touch();
+    }
+
+    public void shipmentCancelled() {
+        this.supplierShipmentId = null;
+        this.shipmentStatus = "cancelled";
+        touch();
+    }
+
+    public void cancelled() {
+        this.state = ServiceOrderState.CANCELLED;
+        touch();
+    }
+
     public void completed() {
         this.state = ServiceOrderState.COMPLETED;
         this.failureReason = null;
