@@ -92,6 +92,13 @@
                    flowable:async="true"
                    flowable:failedJobRetryTimeCycle="R3/PT10S"
                    flowable:delegateExpression="${requestActivationDelegate}"/>
+      <!--
+        Declaration order matters here, and only here. Flowable resolves an error to a handler by
+        walking this activity's boundary events in document order, and a compensation boundary
+        event encountered first makes that walk fail with "Parent activity for boundary
+        compensation event could not be found" - the rejection never reaches its handler at all.
+        Verified by swapping the two back and watching every compensation test fail.
+      -->
       <boundaryEvent id="activationRejected" name="Rejected by supplier" attachedToRef="requestActivation">
         <errorEventDefinition errorRef="SUPPLIER_REJECTED"/>
       </boundaryEvent>
@@ -100,11 +107,7 @@
       </boundaryEvent>
       <serviceTask id="undoRequestActivation" name="Cancel activation" isForCompensation="true"
                    flowable:delegateExpression="${cancelActivationDelegate}"/>
-      <sequenceFlow id="rejectedToRecord" sourceRef="activationRejected" targetRef="recordRejection"/>
-      <serviceTask id="recordRejection" name="Record supplier rejection"
-                   flowable:async="true"
-                   flowable:delegateExpression="${recordRejectionDelegate}"/>
-      <sequenceFlow id="recordToCancel" sourceRef="recordRejection" targetRef="fulfilmentCancelled"/>
+      <sequenceFlow id="rejectedToCancel" sourceRef="activationRejected" targetRef="fulfilmentCancelled"/>
       <sequenceFlow id="toAwaitActivation" sourceRef="requestActivation" targetRef="awaitActivation"/>
 
       <!--
