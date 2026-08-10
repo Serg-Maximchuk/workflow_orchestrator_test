@@ -8,9 +8,53 @@ spring:
   jpa:
     open-in-view: false
     hibernate:
-      # Our own business tables are managed explicitly (Liquibase from Phase 2 onwards).
-      # Flowable manages its own ACT_* schema, see flowable.database-schema-update below.
+      # Our own business tables are managed by Liquibase, Flowable manages its own ACT_* schema
+      # (see flowable.database-schema-update below). Hibernate never touches DDL.
       ddl-auto: none
+  liquibase:
+    change-log: classpath:db/changelog/db.changelog-master.yaml
+  security:
+    oauth2:
+      client:
+        registration:
+          voip-supplier:
+            authorization-grant-type: client_credentials
+            client-id: ${SIL_SUPPLIER_CLIENT_ID:sil-client}
+            client-secret: ${SIL_SUPPLIER_CLIENT_SECRET:sil-secret}
+        provider:
+          voip-supplier:
+            token-uri: ${SIL_SUPPLIER_TOKEN_URI:http://localhost:8081/supplier/oauth/token}
+
+sil:
+  supplier:
+    voip:
+      base-url: ${SIL_SUPPLIER_BASE_URL:http://localhost:8081}
+      # A supplier that hangs must become a supplier that fails, otherwise retries and the circuit
+      # breaker below never trigger and threads simply accumulate.
+      connect-timeout: 2s
+      read-timeout: 3s
+
+resilience4j:
+  retry:
+    instances:
+      voipSupplier:
+        max-attempts: 4
+        wait-duration: 200ms
+        enable-exponential-backoff: true
+        exponential-backoff-multiplier: 2
+        # Only transient faults are retried. A 4xx means the request itself is wrong, and
+        # retrying it just multiplies the same error.
+        retry-exceptions:
+          - org.springframework.web.client.HttpServerErrorException
+          - org.springframework.web.client.ResourceAccessException
+  circuitbreaker:
+    instances:
+      voipSupplier:
+        sliding-window-size: 10
+        minimum-number-of-calls: 5
+        failure-rate-threshold: 50
+        wait-duration-in-open-state: 10s
+        permitted-number-of-calls-in-half-open-state: 3
 
 flowable:
   # Lets Flowable create/upgrade its ACT_* tables on startup. Fine for a learning project;
@@ -25,6 +69,10 @@ flowable:
   idm:
     enabled: false
 
+springdoc:
+  swagger-ui:
+    path: /swagger-ui.html
+
 management:
   endpoints:
     web:
@@ -35,6 +83,10 @@ management:
       show-details: always
 
 logging:
+  pattern:
+    # Every log line carries the correlation id, which is what makes a single order journey
+    # greppable across the API, the engine and the supplier calls.
+    level: "%5p [${spring.application.name},%X{correlationId:-}]"
   level:
     org.flowable: INFO
 
