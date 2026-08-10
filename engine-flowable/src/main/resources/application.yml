@@ -1,0 +1,42 @@
+spring:
+  application:
+    name: service-integration-layer
+  datasource:
+    url: ${SIL_DB_URL:jdbc:postgresql://localhost:5432/sil}
+    username: ${SIL_DB_USER:sil}
+    password: ${SIL_DB_PASSWORD:sil}
+  jpa:
+    open-in-view: false
+    hibernate:
+      # Our own business tables are managed explicitly (Liquibase from Phase 2 onwards).
+      # Flowable manages its own ACT_* schema, see flowable.database-schema-update below.
+      ddl-auto: none
+
+flowable:
+  # Lets Flowable create/upgrade its ACT_* tables on startup. Fine for a learning project;
+  # in production this becomes "false" plus generated DDL applied by a migration tool.
+  database-schema-update: true
+  # Auto-deploy every BPMN definition found under src/main/resources/processes/.
+  check-process-definitions: true
+  process-definition-location-prefix: classpath*:/processes/
+  # The async executor is what makes timers and async continuations actually fire.
+  # It is also what picks work back up after a restart - the core of the Phase 5 demo.
+  async-executor-activate: true
+  idm:
+    enabled: false
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info,metrics
+  endpoint:
+    health:
+      show-details: always
+
+logging:
+  level:
+    org.flowable: INFO
+
+server:
+  port: ${SIL_PORT:8080}
