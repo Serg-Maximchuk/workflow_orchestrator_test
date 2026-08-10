@@ -1,20 +1,29 @@
 package com.example.sil.orders;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.okJson;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
 import static com.github.tomakehurst.wiremock.client.WireMock.urlPathEqualTo;
+import static com.github.tomakehurst.wiremock.client.WireMock.urlPathMatching;
 
 import com.github.tomakehurst.wiremock.WireMockServer;
 import com.github.tomakehurst.wiremock.core.WireMockConfiguration;
+import java.time.Duration;
+import java.util.Date;
+import org.flowable.common.engine.impl.runtime.Clock;
 import org.flowable.engine.ManagementService;
 import org.flowable.engine.RuntimeService;
+import org.flowable.engine.impl.cfg.ProcessEngineConfigurationImpl;
 import org.flowable.job.api.Job;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
+import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
+import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
+import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 
 /**
  * Base for the order workflow tests.
@@ -41,6 +50,8 @@ abstract class AbstractOrderWorkflowTest {
     protected static final String SUBSCRIPTIONS_PATH = "/supplier/v1/subscriptions";
     protected static final String USERS_PATH = "/supplier/v1/users";
     protected static final String NUMBERS_PATH = "/supplier/v1/numbers/reservations";
+    protected static final String ACTIVATIONS_PATH = "/supplier/v1/numbers/activations";
+    protected static final String SHIPMENTS_PATH = "/supplier/v1/shipments";
 
     /**
      * One stub for the whole JVM, started once and never stopped.
@@ -65,6 +76,9 @@ abstract class AbstractOrderWorkflowTest {
     @Autowired
     protected RuntimeService runtimeService;
 
+    @Autowired
+    protected ProcessEngineConfigurationImpl processEngineConfiguration;
+
     @DynamicPropertySource
     static void supplierProperties(DynamicPropertyRegistry registry) {
         registry.add("sil.supplier.voip.base-url", () -> supplier.baseUrl());
@@ -84,6 +98,65 @@ abstract class AbstractOrderWorkflowTest {
                 .willReturn(okJson("{\"userId\":\"user-1\"}")));
         supplier.stubFor(post(urlPathEqualTo(NUMBERS_PATH))
                 .willReturn(okJson("{\"phoneNumber\":\"+442071234567\",\"reservationId\":\"res-1\"}")));
+        supplier.stubFor(post(urlPathEqualTo(ACTIVATIONS_PATH))
+                .willReturn(okJson("{\"activationId\":\"act-1\",\"status\":\"accepted\"}")));
+        supplier.stubFor(post(urlPathEqualTo(SHIPMENTS_PATH))
+                .willReturn(okJson("{\"shipmentId\":\"ship-1\"}")));
+        stubShipmentStatus("delivered");
+    }
+
+    protected void stubShipmentStatus(String status) {
+        supplier.stubFor(get(urlPathMatching(SHIPMENTS_PATH + "/.*"))
+                .willReturn(okJson("{\"shipmentId\":\"ship-1\",\"status\":\"" + status + "\"}")));
+    }
+
+    /**
+     * Moves the engine clock forward and makes every timer that has now come due executable.
+     *
+     * <p>This is what replaces sleeping in the tests. A timer is a row with a due date, so "two
+     * hours have passed" is a statement about the clock, not about wall time - which means an SLA
+     * measured in hours and a poll loop measured in weeks can both be tested in milliseconds, and
+     * deterministically.
+     */
+    protected void advanceClockBy(Duration duration) {
+        Clock clock = processEngineConfiguration.getClock();
+        Date now = clock.getCurrentTime();
+        clock.setCurrentTime(Date.from(now.toInstant().plus(duration)));
+
+        managementService.createTimerJobQuery().executable().list()
+                .forEach(timer -> managementService.moveTimerToExecutableJob(timer.getId()));
+    }
+
+    /** Puts the clock back, so one test's time travel does not leak into the next. */
+    protected void resetClock() {
+        processEngineConfiguration.getClock().reset();
+    }
+
+    protected long timerJobCount() {
+        return managementService.createTimerJobQuery().count();
+    }
+
+    /**
+     * Takes an order that is parked on the activation callback all the way to completion: delivers
+     * the callback, then moves the clock past the shipment poll timer.
+     *
+     * <p>Lives here because most tests care about some specific part of the journey and just need
+     * the rest to happen.
+     */
+    protected void completeActivationAndDelivery(String orderId) throws Exception {
+        mockMvc.perform(MockMvcRequestBuilders.post("/callbacks/voip/number-activation")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"orderId":"%s","activated":true,"reason":""}""".formatted(orderId)))
+                .andExpect(MockMvcResultMatchers.status().isAccepted());
+
+        executeAllJobs();
+        advanceClockBy(Duration.ofHours(7));
+        executeAllJobs();
+    }
+
+    protected long deadLetterJobCount() {
+        return managementService.createDeadLetterJobQuery().count();
     }
 
     /**
