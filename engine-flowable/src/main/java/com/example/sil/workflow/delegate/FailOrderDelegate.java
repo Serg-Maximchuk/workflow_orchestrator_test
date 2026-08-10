@@ -1,5 +1,6 @@
 package com.example.sil.workflow.delegate;
 
+import com.example.sil.shared.messaging.OrderEventPublisher;
 import com.example.sil.shared.orders.ServiceOrder;
 import com.example.sil.shared.orders.ServiceOrderRepository;
 import com.example.sil.shared.orders.ServiceOrderState;
@@ -14,8 +15,11 @@ import org.springframework.stereotype.Component;
 @Component("failOrderDelegate")
 public class FailOrderDelegate extends AbstractOrderDelegate {
 
-    public FailOrderDelegate(ServiceOrderRepository orders) {
+    private final OrderEventPublisher events;
+
+    public FailOrderDelegate(ServiceOrderRepository orders, OrderEventPublisher events) {
         super(orders);
+        this.events = events;
     }
 
     @Override
@@ -23,5 +27,6 @@ public class FailOrderDelegate extends AbstractOrderDelegate {
         if (order.getState() != ServiceOrderState.FAILED) {
             order.failed("Order fulfilment failed");
         }
+        events.orderReachedFinalState(order, OrderEventPublisher.ORDER_FAILED);
     }
 }

@@ -1,5 +1,6 @@
 package com.example.sil.workflow.delegate;
 
+import com.example.sil.shared.messaging.OrderEventPublisher;
 import com.example.sil.shared.orders.ServiceOrder;
 import com.example.sil.shared.orders.ServiceOrderRepository;
 import org.flowable.engine.delegate.DelegateExecution;
@@ -16,13 +17,17 @@ public class CancelOrderDelegate extends AbstractOrderDelegate {
 
     private static final Logger log = LoggerFactory.getLogger(CancelOrderDelegate.class);
 
-    public CancelOrderDelegate(ServiceOrderRepository orders) {
+    private final OrderEventPublisher events;
+
+    public CancelOrderDelegate(ServiceOrderRepository orders, OrderEventPublisher events) {
         super(orders);
+        this.events = events;
     }
 
     @Override
     protected void executeStep(ServiceOrder order, DelegateExecution execution) {
         order.cancelled();
+        events.orderReachedFinalState(order, OrderEventPublisher.ORDER_CANCELLED);
         log.info("Order {} cancelled and fully compensated", order.getId());
     }
 }
