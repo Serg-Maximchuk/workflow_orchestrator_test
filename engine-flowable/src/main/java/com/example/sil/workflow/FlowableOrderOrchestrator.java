@@ -5,10 +5,12 @@ import com.example.sil.shared.orders.ServiceOrder;
 import java.time.Instant;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import org.flowable.engine.HistoryService;
 import org.flowable.engine.RuntimeService;
 import org.flowable.engine.history.HistoricActivityInstance;
 import org.flowable.engine.history.HistoricProcessInstance;
+import org.flowable.engine.runtime.Execution;
 import org.flowable.engine.runtime.ProcessInstance;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,13 +28,25 @@ public class FlowableOrderOrchestrator implements OrderOrchestrator {
     private static final Logger log = LoggerFactory.getLogger(FlowableOrderOrchestrator.class);
 
     static final String PROCESS_DEFINITION_KEY = "serviceOrder";
+    static final String NUMBER_ACTIVATED_MESSAGE = "numberActivated";
+    static final String ACTIVATION_SUCCEEDED = "activationSucceeded";
+    static final String ACTIVATION_REASON = "activationReason";
+
+    private static final Set<String> PLUMBING_ACTIVITY_TYPES = Set.of(
+            "sequenceFlow", "exclusiveGateway", "parallelGateway", "inclusiveGateway",
+            "boundaryEvent", "boundaryTimer", "boundaryError", "boundaryMessage");
 
     private final RuntimeService runtimeService;
     private final HistoryService historyService;
+    private final WorkflowTimingProperties timings;
 
-    public FlowableOrderOrchestrator(RuntimeService runtimeService, HistoryService historyService) {
+    public FlowableOrderOrchestrator(
+            RuntimeService runtimeService,
+            HistoryService historyService,
+            WorkflowTimingProperties timings) {
         this.runtimeService = runtimeService;
         this.historyService = historyService;
+        this.timings = timings;
     }
 
     @Override
@@ -44,11 +58,40 @@ public class FlowableOrderOrchestrator implements OrderOrchestrator {
                 order.getId(),
                 Map.of(
                         OrderVariables.ORDER_ID, order.getId(),
-                        OrderVariables.CORRELATION_ID, order.getCorrelationId()));
+                        OrderVariables.CORRELATION_ID, order.getCorrelationId(),
+                        OrderVariables.SHIPMENT_POLL_DELAY, timings.shipmentPollDelay().toString()));
 
         log.info("Started {} instance {} for order {}",
                 PROCESS_DEFINITION_KEY, instance.getId(), order.getId());
         return instance.getId();
+    }
+
+    @Override
+    public void notifyNumberActivated(String orderId, boolean activated, String reason) {
+        // Correlate by business key plus the name of the message the process is subscribed to.
+        // Querying for the subscription rather than trusting a stored execution id is what makes
+        // a duplicate or late callback safe: once the message has been delivered the subscription
+        // is gone, so the second delivery finds nothing and is rejected instead of corrupting a
+        // process that has already moved on.
+        ProcessInstance instance = runtimeService.createProcessInstanceQuery()
+                .processInstanceBusinessKey(orderId)
+                .singleResult();
+
+        Execution waiting = instance == null ? null : runtimeService.createExecutionQuery()
+                .processInstanceId(instance.getId())
+                .messageEventSubscriptionName(NUMBER_ACTIVATED_MESSAGE)
+                .singleResult();
+
+        if (waiting == null) {
+            throw new NoWaitingOrderException(orderId);
+        }
+
+        log.info("Delivering {} callback for order {} (activated={})",
+                NUMBER_ACTIVATED_MESSAGE, orderId, activated);
+        runtimeService.messageEventReceived(
+                NUMBER_ACTIVATED_MESSAGE,
+                waiting.getId(),
+                Map.of(ACTIVATION_SUCCEEDED, activated, ACTIVATION_REASON, reason == null ? "" : reason));
     }
 
     @Override
@@ -68,22 +111,36 @@ public class FlowableOrderOrchestrator implements OrderOrchestrator {
                 .processInstanceId(instance.getId())
                 .orderByHistoricActivityInstanceStartTime()
                 .asc()
+                // Steps of the same instance can start within the same millisecond, and on a
+                // timeline "A then B" has to be stable rather than whatever the database returns.
+                .orderByHistoricActivityInstanceEndTime()
+                .asc()
                 .list()
                 .stream()
-                // Sequence flows are in the history too, but they are plumbing, not steps anyone
-                // wants to read in a timeline.
-                .filter(activity -> !"sequenceFlow".equals(activity.getActivityType()))
+                .filter(FlowableOrderOrchestrator::isReadableStep)
                 .map(FlowableOrderOrchestrator::toTimelineEntry)
                 .toList();
     }
 
-    private static TimelineEntry toTimelineEntry(HistoricActivityInstance activity) {
-        String name = activity.getActivityName() != null
-                ? activity.getActivityName()
-                : activity.getActivityId();
+    /**
+     * History contains the whole execution graph; a timeline is meant to be read by a person.
+     *
+     * <p>Two things are dropped. Plumbing - sequence flows and gateways - because nobody follows an
+     * order by its arrows. And anything the model did not bother to name, which conveniently
+     * excludes armed-but-never-fired boundary events and the internal start/end events of the
+     * wait subprocess. When a boundary event does fire, its effect is still visible, because the
+     * task it leads to is a named step of its own.
+     */
+    private static boolean isReadableStep(HistoricActivityInstance activity) {
+        if (activity.getActivityName() == null || activity.getActivityName().isBlank()) {
+            return false;
+        }
+        return !PLUMBING_ACTIVITY_TYPES.contains(activity.getActivityType());
+    }
 
+    private static TimelineEntry toTimelineEntry(HistoricActivityInstance activity) {
         return new TimelineEntry(
-                name,
+                activity.getActivityName(),
                 toInstant(activity.getStartTime()),
                 toInstant(activity.getEndTime()),
                 activity.getDurationInMillis());
