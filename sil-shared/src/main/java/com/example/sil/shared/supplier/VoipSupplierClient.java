@@ -130,6 +130,51 @@ public class VoipSupplierClient {
                 .body(ShipmentStatusResponse.class);
     }
 
+    // --- Compensating operations -------------------------------------------------------------
+    //
+    // Every provisioning call above has an undo below, because a remote side effect cannot be
+    // rolled back by a transaction. "Delete the customer we created" is itself an API call that
+    // can fail, be retried, and be run out of order - which is exactly why compensation belongs in
+    // the process model rather than in a catch block.
+
+    /** Undoes {@link #createCustomer}. */
+    public void deleteCustomer(String customerId) {
+        log.info("Compensating: deleting supplier customer {}", customerId);
+        restClient.delete().uri("/supplier/v1/customers/{id}", customerId).retrieve().toBodilessEntity();
+    }
+
+    /** Undoes {@link #createSubscription}. */
+    public void deleteSubscription(String subscriptionId) {
+        log.info("Compensating: deleting supplier subscription {}", subscriptionId);
+        restClient.delete().uri("/supplier/v1/subscriptions/{id}", subscriptionId).retrieve().toBodilessEntity();
+    }
+
+    /** Undoes {@link #createUser}. */
+    public void deleteUser(String userId) {
+        log.info("Compensating: deleting supplier user {}", userId);
+        restClient.delete().uri("/supplier/v1/users/{id}", userId).retrieve().toBodilessEntity();
+    }
+
+    /** Undoes {@link #reserveNumber}: the number goes back to the pool. */
+    public void releaseNumber(String phoneNumber) {
+        log.info("Compensating: releasing number {}", phoneNumber);
+        restClient.delete().uri("/supplier/v1/numbers/reservations/{number}", phoneNumber)
+                .retrieve().toBodilessEntity();
+    }
+
+    /** Undoes {@link #activateNumber}, whether or not the activation has completed yet. */
+    public void cancelActivation(String activationId) {
+        log.info("Compensating: cancelling activation {}", activationId);
+        restClient.delete().uri("/supplier/v1/numbers/activations/{id}", activationId)
+                .retrieve().toBodilessEntity();
+    }
+
+    /** Undoes {@link #shipHardware}: recall it if it has not left, take it back if it has. */
+    public void cancelShipment(String shipmentId) {
+        log.info("Compensating: cancelling shipment {}", shipmentId);
+        restClient.delete().uri("/supplier/v1/shipments/{id}", shipmentId).retrieve().toBodilessEntity();
+    }
+
     /**
      * Invoked when the supplier is failing consistently. Returning a "cannot qualify right now"
      * answer keeps our own API responsive instead of passing the supplier's outage straight
