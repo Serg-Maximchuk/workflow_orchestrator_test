@@ -57,8 +57,18 @@ flowchart LR
     B --> C[Create subscription]
     C --> D[Create user]
     D --> E[Reserve phone number]
-    E --> F[Complete order]
-    F --> G([Order completed])
+    E --> F[Request activation]
+    F -->|supplier rejects| X[Fail order]
+    F --> G[Await activation callback]
+    G -->|SLA breached| X
+    G -.->|every 30 min| R[Send reminder]
+    G --> H[Ship hardware]
+    H --> W(["Wait, then poll"])
+    W --> P[Poll shipment status]
+    P -->|not delivered| W
+    P -->|delivered| Z[Complete order]
+    X --> XE([Order failed])
+    Z --> ZE([Order completed])
 ```
 
 Every service task is async, which is the point rather than an optimisation: each supplier call
@@ -66,7 +76,23 @@ gets its own transaction boundary, so a failure at step three does not undo the 
 effects that already happened - and from Phase 3, its own retry counter, stored in the database and
 therefore surviving a restart.
 
-Not yet: retries, timers, compensation, recovery. Those are Phases 3-5.
+The unreliable half - the part a workflow engine exists for:
+
+- **Retries** are engine-managed (`R3/PT10S` per step). A retry is a row with a due date and a
+  remaining count, so a redeploy in the middle of a backoff loses nothing
+- **Dead letter queue** for work that exhausted its retries: `GET /admin/workflow/dead-letter` says
+  which order is stuck and why, `POST .../{id}/retry` resumes it from the failed step once the
+  cause is fixed. The order is parked, not failed and not half-applied
+- **Business error vs technical failure**: a supplier rejection (4xx) is raised as a BPMN error and
+  takes the rejection path immediately; a 5xx or a timeout is retried. Retrying a rejection just
+  annoys the supplier and delays telling the customer
+- **Message correlation**: activation is confirmed later on `POST /callbacks/voip/number-activation`.
+  A duplicate or late callback gets a 409 rather than disturbing an order that has moved on
+- **Timers**: an interrupting SLA timer fails an order the supplier never confirmed; a repeating
+  non-interrupting timer sends reminders without taking the order off its wait; a poll loop sleeps
+  between shipment checks, costing nothing but a database row while it waits
+
+Not yet: compensation and the restart demo. Those are Phases 4-5.
 
 ## Requirements
 

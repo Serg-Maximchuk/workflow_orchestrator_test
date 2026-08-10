@@ -179,7 +179,7 @@ must-have demo.
 - Covers: 1, 2, 3, 4, 26
 - **Artifact:** diagram in the README (PNG exported from Flowable Modeler / bpmn.io)
 
-### Phase 3 — the unreliable world (2 days)
+### Phase 3 — the unreliable world (2 days) — DONE
 - Retry cycle, dead letter, admin endpoint for manual retry
 - BPMN error vs technical exception, error boundary events
 - Timers: delay before polling hardware status; boundary SLA timer; non-interrupting reminder

@@ -33,6 +33,9 @@ Status values: **agreed** (accepted by the architect), **proposed** (raised, awa
 | V-015 | `GET /{id}/timeline` is not a TMF endpoint | Reads the engine's own history. Genuinely useful for support, and deliberately kept outside the TMF surface so it can change freely | agreed |
 | V-016 | Order states limited to `acknowledged`, `inProgress`, `completed`, `failed`; TMF also defines `pending`, `held`, `assessingCancellation`, `pendingCancellation`, `cancelled`, `rejected`, `partial` | Only the states the current process can actually reach. Cancellation states arrive in Phase 4 with the cancel journey | temporary — revisit in Phase 4 |
 
+| V-017 | `POST /callbacks/voip/number-activation` is our own shape, not a TMF notification | The supplier is not TMF-aware. Correlation is on our order id, which we hand over as `callbackCorrelationId` when requesting activation | temporary — closes when the real supplier callback contract arrives |
+| V-018 | `/admin/workflow/**` is outside TMF entirely | Support tooling, not a client-facing API. Kept separate so it can change without touching the TMF contract | agreed |
+
 ## Cross-cutting
 
 | # | Variance | Reason | Status |
