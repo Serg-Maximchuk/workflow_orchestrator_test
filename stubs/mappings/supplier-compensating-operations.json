@@ -1,0 +1,64 @@
+{
+  "mappings": [
+    {
+      "name": "Delete customer",
+      "request": {
+        "method": "DELETE",
+        "urlPathPattern": "/supplier/v1/customers/.*"
+      },
+      "response": {
+        "status": 204
+      }
+    },
+    {
+      "name": "Delete subscription",
+      "request": {
+        "method": "DELETE",
+        "urlPathPattern": "/supplier/v1/subscriptions/.*"
+      },
+      "response": {
+        "status": 204
+      }
+    },
+    {
+      "name": "Delete user",
+      "request": {
+        "method": "DELETE",
+        "urlPathPattern": "/supplier/v1/users/.*"
+      },
+      "response": {
+        "status": 204
+      }
+    },
+    {
+      "name": "Release number",
+      "request": {
+        "method": "DELETE",
+        "urlPathPattern": "/supplier/v1/numbers/reservations/.*"
+      },
+      "response": {
+        "status": 204
+      }
+    },
+    {
+      "name": "Cancel activation",
+      "request": {
+        "method": "DELETE",
+        "urlPathPattern": "/supplier/v1/numbers/activations/.*"
+      },
+      "response": {
+        "status": 204
+      }
+    },
+    {
+      "name": "Cancel shipment",
+      "request": {
+        "method": "DELETE",
+        "urlPathPattern": "/supplier/v1/shipments/.*"
+      },
+      "response": {
+        "status": 204
+      }
+    }
+  ]
+}
