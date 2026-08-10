@@ -1,0 +1,111 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             xmlns:flowable="http://flowable.org/bpmn"
+             xmlns:bpmndi="http://www.omg.org/spec/BPMN/20100524/DI"
+             xmlns:omgdc="http://www.omg.org/spec/DD/20100524/DC"
+             xmlns:omgdi="http://www.omg.org/spec/DD/20100524/DI"
+             targetNamespace="http://example.com/sil">
+
+  <!--
+    VOIP service order fulfilment.
+
+    Every service task is flowable:async="true", and that is a design decision rather than a
+    default. An async task is a row in ACT_RU_JOB: the engine commits the state reached so far,
+    then a job executor thread picks the task up in a transaction of its own. Three consequences,
+    all of which this project depends on:
+
+      1. Each supplier call gets its own transaction boundary. A failure while creating the user
+         does not undo the customer and subscription that were already created at the supplier -
+         which would be impossible to undo anyway, since a remote side effect is not transactional.
+      2. Each task gets its own retry counter (Phase 3). Retries live in the database, so they
+         survive this application being restarted.
+      3. The submitting HTTP request returns as soon as the order is durable, without waiting for
+         any supplier at all.
+
+    exclusive="true" (the default) keeps the jobs of one process instance from running
+    concurrently, so the delegates below can read and write the same order row without fighting.
+  -->
+  <process id="serviceOrder" name="VOIP Service Order Fulfilment" isExecutable="true">
+
+    <startEvent id="orderSubmitted" name="Order submitted"/>
+    <sequenceFlow id="toCreateCustomer" sourceRef="orderSubmitted" targetRef="createCustomer"/>
+
+    <serviceTask id="createCustomer" name="Create customer"
+                 flowable:async="true"
+                 flowable:delegateExpression="${createCustomerDelegate}"/>
+    <sequenceFlow id="toCreateSubscription" sourceRef="createCustomer" targetRef="createSubscription"/>
+
+    <serviceTask id="createSubscription" name="Create subscription"
+                 flowable:async="true"
+                 flowable:delegateExpression="${createSubscriptionDelegate}"/>
+    <sequenceFlow id="toCreateUser" sourceRef="createSubscription" targetRef="createUser"/>
+
+    <serviceTask id="createUser" name="Create user"
+                 flowable:async="true"
+                 flowable:delegateExpression="${createUserDelegate}"/>
+    <sequenceFlow id="toReserveNumber" sourceRef="createUser" targetRef="reserveNumber"/>
+
+    <serviceTask id="reserveNumber" name="Reserve phone number"
+                 flowable:async="true"
+                 flowable:delegateExpression="${reserveNumberDelegate}"/>
+    <sequenceFlow id="toCompleteOrder" sourceRef="reserveNumber" targetRef="completeOrder"/>
+
+    <serviceTask id="completeOrder" name="Complete order"
+                 flowable:async="true"
+                 flowable:delegateExpression="${completeOrderDelegate}"/>
+    <sequenceFlow id="toOrderCompleted" sourceRef="completeOrder" targetRef="orderCompleted"/>
+
+    <endEvent id="orderCompleted" name="Order completed"/>
+  </process>
+
+  <bpmndi:BPMNDiagram id="serviceOrderDiagram">
+    <bpmndi:BPMNPlane id="serviceOrderPlane" bpmnElement="serviceOrder">
+      <bpmndi:BPMNShape id="s_orderSubmitted" bpmnElement="orderSubmitted">
+        <omgdc:Bounds x="100" y="100" width="30" height="30"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_createCustomer" bpmnElement="createCustomer">
+        <omgdc:Bounds x="180" y="75" width="120" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_createSubscription" bpmnElement="createSubscription">
+        <omgdc:Bounds x="350" y="75" width="120" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_createUser" bpmnElement="createUser">
+        <omgdc:Bounds x="520" y="75" width="120" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_reserveNumber" bpmnElement="reserveNumber">
+        <omgdc:Bounds x="690" y="75" width="120" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_completeOrder" bpmnElement="completeOrder">
+        <omgdc:Bounds x="860" y="75" width="120" height="80"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNShape id="s_orderCompleted" bpmnElement="orderCompleted">
+        <omgdc:Bounds x="1030" y="100" width="30" height="30"/>
+      </bpmndi:BPMNShape>
+      <bpmndi:BPMNEdge id="e_toCreateCustomer" bpmnElement="toCreateCustomer">
+        <omgdi:waypoint x="130" y="115"/>
+        <omgdi:waypoint x="180" y="115"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_toCreateSubscription" bpmnElement="toCreateSubscription">
+        <omgdi:waypoint x="300" y="115"/>
+        <omgdi:waypoint x="350" y="115"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_toCreateUser" bpmnElement="toCreateUser">
+        <omgdi:waypoint x="470" y="115"/>
+        <omgdi:waypoint x="520" y="115"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_toReserveNumber" bpmnElement="toReserveNumber">
+        <omgdi:waypoint x="640" y="115"/>
+        <omgdi:waypoint x="690" y="115"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_toCompleteOrder" bpmnElement="toCompleteOrder">
+        <omgdi:waypoint x="810" y="115"/>
+        <omgdi:waypoint x="860" y="115"/>
+      </bpmndi:BPMNEdge>
+      <bpmndi:BPMNEdge id="e_toOrderCompleted" bpmnElement="toOrderCompleted">
+        <omgdi:waypoint x="980" y="115"/>
+        <omgdi:waypoint x="1030" y="115"/>
+      </bpmndi:BPMNEdge>
+    </bpmndi:BPMNPlane>
+  </bpmndi:BPMNDiagram>
+</definitions>
