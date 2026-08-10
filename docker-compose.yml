@@ -1,0 +1,46 @@
+name: sil
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: sil-postgres
+    environment:
+      POSTGRES_DB: sil
+      POSTGRES_USER: sil
+      POSTGRES_PASSWORD: sil
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U sil -d sil"]
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Stands in for the supplier VOIP / hardware APIs so development never depends on a
+  # third-party sandbox. Mappings live in ./stubs and are added from Phase 1 onwards.
+  wiremock:
+    image: wiremock/wiremock:3.13.1
+    container_name: sil-wiremock
+    command: ["--global-response-templating", "--verbose"]
+    ports:
+      - "8081:8080"
+    volumes:
+      - ./stubs:/home/wiremock
+
+  # Used from Phase 5 for the transactional outbox and idempotent consumer.
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: sil-rabbitmq
+    ports:
+      - "5672:5672"
+      - "15672:15672"
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "-q", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  postgres-data:
