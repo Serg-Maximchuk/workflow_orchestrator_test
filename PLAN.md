@@ -171,7 +171,7 @@ must-have demo.
 - Covers items: 11, 12, 19, 20, 27, 28
 - **Artifact:** Postman collection plus `docs/variance-log.md` (first entry)
 
-### Phase 2 — the first BPMN process (1–2 days)
+### Phase 2 — the first BPMN process (1–2 days) — DONE
 - `serviceOrder.bpmn20.xml`: create customer → subscription → user → reserve number → complete
 - Service tasks via delegate expressions, async continuations
 - `POST /serviceOrder` starts the process, `GET /{id}` reads state from the process plus the database

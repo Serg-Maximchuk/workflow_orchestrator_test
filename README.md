@@ -41,8 +41,32 @@ TMF645 Service Qualification, end to end and synchronous:
 - OpenAPI at `/v3/api-docs`, Swagger UI at `/swagger-ui.html`, deviations from TMF recorded in
   [docs/variance-log.md](docs/variance-log.md)
 
-Not yet: any workflow. That starts in Phase 2, and the retrying and state ownership move into the
-engine with it.
+TMF641 Service Ordering, fulfilled by a BPMN process:
+
+- `POST /tmf-api/serviceOrdering/v4/serviceOrder` stores the order, starts a workflow and returns
+  immediately - no supplier has been contacted yet
+- the workflow drives four supplier operations in order (customer -> subscription -> user -> number
+  reservation), each as its own async job with its own transaction
+- `GET .../{id}` reports the supplier references gathered so far; `GET .../{id}/timeline` reports
+  the steps actually taken and how long each one took, read from engine history
+- an order in flight when a new process version is deployed keeps running the version it started on
+
+```mermaid
+flowchart LR
+    A([Order submitted]) --> B[Create customer]
+    B --> C[Create subscription]
+    C --> D[Create user]
+    D --> E[Reserve phone number]
+    E --> F[Complete order]
+    F --> G([Order completed])
+```
+
+Every service task is async, which is the point rather than an optimisation: each supplier call
+gets its own transaction boundary, so a failure at step three does not undo the two remote side
+effects that already happened - and from Phase 3, its own retry counter, stored in the database and
+therefore surviving a restart.
+
+Not yet: retries, timers, compensation, recovery. Those are Phases 3-5.
 
 ## Requirements
 

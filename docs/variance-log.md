@@ -23,6 +23,16 @@ Status values: **agreed** (accepted by the architect), **proposed** (raised, awa
 | V-005 | `state` is always `done`; the TMF task lifecycle (`acknowledged`, `inProgress`, `terminatedWithError`) is not modelled | Qualification is synchronous in Phase 1. When it moves behind a workflow the real lifecycle arrives with it | temporary — revisit in Phase 2 |
 | V-006 | `correlationId` added to the response, which is not a TMF field | Makes a single order journey traceable from the caller's side without reading our logs. Additive, so it does not break a TMF-conformant client | agreed |
 
+## TMF641 Service Ordering
+
+| # | Variance | Reason | Status |
+|---|---|---|---|
+| V-012 | Path is `/tmf-api/serviceOrdering/v4/serviceOrder` rather than `/serviceOrderingManagement/v4/...` | Consistent with V-001 | agreed |
+| V-013 | `serviceOrderItem` array collapsed into one flat order: one customer, one place, one service spec | One service per order in Phase 2. The array arrives with multi-item orders, not before | proposed |
+| V-014 | `supplierRefs` object added, which is not a TMF field | Makes the fulfilment progress visible without exposing engine internals. A null field means that step has not completed | agreed |
+| V-015 | `GET /{id}/timeline` is not a TMF endpoint | Reads the engine's own history. Genuinely useful for support, and deliberately kept outside the TMF surface so it can change freely | agreed |
+| V-016 | Order states limited to `acknowledged`, `inProgress`, `completed`, `failed`; TMF also defines `pending`, `held`, `assessingCancellation`, `pendingCancellation`, `cancelled`, `rejected`, `partial` | Only the states the current process can actually reach. Cancellation states arrive in Phase 4 with the cancel journey | temporary — revisit in Phase 4 |
+
 ## Cross-cutting
 
 | # | Variance | Reason | Status |
