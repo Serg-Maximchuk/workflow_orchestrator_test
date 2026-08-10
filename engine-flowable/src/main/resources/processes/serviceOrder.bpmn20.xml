@@ -5,160 +5,300 @@
              targetNamespace="http://example.com/sil">
 
   <!--
-    VOIP service order fulfilment.
+    VOIP service order fulfilment, modelled as a saga.
 
-    Every service task is flowable:async="true", and that is a design decision rather than a
-    default. An async task is a row in ACT_RU_JOB: the engine commits the state reached so far,
-    then a job executor thread picks the task up in a transaction of its own. Three consequences,
-    all of which this project depends on:
+    Two structural decisions carry the whole file.
 
-      1. Each supplier call gets its own transaction boundary. A failure while creating the user
-         does not undo the customer and subscription that were already created at the supplier -
-         which would be impossible to undo anyway, since a remote side effect is not transactional.
-      2. Each task gets its own retry counter. failedJobRetryTimeCycle below is stored in the
-         database, so retries survive this application being restarted - the one thing an
-         in-process retry loop can never do.
-      3. The submitting HTTP request returns as soon as the order is durable, without waiting for
-         any supplier at all.
+    1. Every service task is flowable:async="true". An async task is a row in ACT_RU_JOB: the engine
+       commits the state reached so far, then a job executor thread picks the task up in a
+       transaction of its own. So each supplier call has its own transaction boundary and its own
+       retry counter (failedJobRetryTimeCycle), and retries survive a restart of this application -
+       the one thing an in-process retry loop can never do.
 
-    The retry cycles are short here so the tests stay readable. Real values would back off much
-    further; the shape (R<attempts>/PT<interval>) is what matters.
+    2. Provisioning lives inside a <transaction> subprocess. A database transaction cannot roll back
+       a customer that now exists in the supplier's system; the only way back is to call the
+       supplier again and undo it. A BPMN transaction gives that a shape: reaching a cancel end
+       event inside it triggers the compensation handlers of every activity that completed, in
+       reverse order, and only then does the cancel boundary event outside fire.
+
+       The alternative - unwinding by hand in a catch block - has to answer "how far did we get?"
+       at every failure point. Here the engine already knows, because it recorded each completed
+       activity as it happened.
+
+    The three ways in: the supplier rejects the activation, the SLA expires, or the client cancels.
+    All three converge on a cancel end event, so there is exactly one unwind path to reason about.
   -->
   <process id="serviceOrder" name="VOIP Service Order Fulfilment" isExecutable="true">
 
     <startEvent id="orderSubmitted" name="Order submitted"/>
-    <sequenceFlow id="toCreateCustomer" sourceRef="orderSubmitted" targetRef="createCustomer"/>
+    <sequenceFlow id="toFulfilment" sourceRef="orderSubmitted" targetRef="fulfilment"/>
 
-    <serviceTask id="createCustomer" name="Create customer"
-                 flowable:async="true"
-                 flowable:failedJobRetryTimeCycle="R3/PT10S"
-                 flowable:delegateExpression="${createCustomerDelegate}"/>
-    <sequenceFlow id="toCreateSubscription" sourceRef="createCustomer" targetRef="createSubscription"/>
+    <transaction id="fulfilment" name="Provision service">
 
-    <serviceTask id="createSubscription" name="Create subscription"
-                 flowable:async="true"
-                 flowable:failedJobRetryTimeCycle="R3/PT10S"
-                 flowable:delegateExpression="${createSubscriptionDelegate}"/>
-    <sequenceFlow id="toCreateUser" sourceRef="createSubscription" targetRef="createUser"/>
+      <startEvent id="fulfilmentStarted"/>
+      <sequenceFlow id="toCreateCustomer" sourceRef="fulfilmentStarted" targetRef="createCustomer"/>
 
-    <serviceTask id="createUser" name="Create user"
-                 flowable:async="true"
-                 flowable:failedJobRetryTimeCycle="R3/PT10S"
-                 flowable:delegateExpression="${createUserDelegate}"/>
-    <sequenceFlow id="toReserveNumber" sourceRef="createUser" targetRef="reserveNumber"/>
+      <serviceTask id="createCustomer" name="Create customer"
+                   flowable:async="true"
+                   flowable:failedJobRetryTimeCycle="R3/PT10S"
+                   flowable:delegateExpression="${createCustomerDelegate}"/>
+      <boundaryEvent id="compensateCreateCustomer" attachedToRef="createCustomer">
+        <compensateEventDefinition/>
+      </boundaryEvent>
+      <serviceTask id="undoCreateCustomer" name="Delete customer" isForCompensation="true"
+                   flowable:delegateExpression="${deleteCustomerDelegate}"/>
+      <sequenceFlow id="toCreateSubscription" sourceRef="createCustomer" targetRef="createSubscription"/>
 
-    <serviceTask id="reserveNumber" name="Reserve phone number"
-                 flowable:async="true"
-                 flowable:failedJobRetryTimeCycle="R3/PT10S"
-                 flowable:delegateExpression="${reserveNumberDelegate}"/>
-    <sequenceFlow id="toRequestActivation" sourceRef="reserveNumber" targetRef="requestActivation"/>
+      <serviceTask id="createSubscription" name="Create subscription"
+                   flowable:async="true"
+                   flowable:failedJobRetryTimeCycle="R3/PT10S"
+                   flowable:delegateExpression="${createSubscriptionDelegate}"/>
+      <boundaryEvent id="compensateCreateSubscription" attachedToRef="createSubscription">
+        <compensateEventDefinition/>
+      </boundaryEvent>
+      <serviceTask id="undoCreateSubscription" name="Delete subscription" isForCompensation="true"
+                   flowable:delegateExpression="${deleteSubscriptionDelegate}"/>
+      <sequenceFlow id="toCreateUser" sourceRef="createSubscription" targetRef="createUser"/>
 
-    <!--
-      The supplier can reject an activation outright - the number is already ported, the address
-      does not match. That is a business answer, not a technical fault, and the delegate raises it
-      as a BPMN error rather than an exception. The difference is everything: an exception means
-      "try again, this might work", a BPMN error means "this will never work, take another path".
-      Retrying a rejection four times just annoys the supplier and delays telling the customer.
-    -->
-    <serviceTask id="requestActivation" name="Request number activation"
-                 flowable:async="true"
-                 flowable:failedJobRetryTimeCycle="R3/PT10S"
-                 flowable:delegateExpression="${requestActivationDelegate}"/>
-    <boundaryEvent id="activationRejected" name="Rejected by supplier" attachedToRef="requestActivation">
-      <errorEventDefinition errorRef="SUPPLIER_REJECTED"/>
-    </boundaryEvent>
-    <sequenceFlow id="rejectedToFail" sourceRef="activationRejected" targetRef="failOrder"/>
-    <sequenceFlow id="toAwaitActivation" sourceRef="requestActivation" targetRef="awaitActivation"/>
+      <serviceTask id="createUser" name="Create user"
+                   flowable:async="true"
+                   flowable:failedJobRetryTimeCycle="R3/PT10S"
+                   flowable:delegateExpression="${createUserDelegate}"/>
+      <boundaryEvent id="compensateCreateUser" attachedToRef="createUser">
+        <compensateEventDefinition/>
+      </boundaryEvent>
+      <serviceTask id="undoCreateUser" name="Delete user" isForCompensation="true"
+                   flowable:delegateExpression="${deleteUserDelegate}"/>
+      <sequenceFlow id="toReserveNumber" sourceRef="createUser" targetRef="reserveNumber"/>
 
-    <!--
-      Waiting for the supplier's callback. The wait is wrapped in a subprocess purely so timers can
-      be attached to it: boundary events attach to activities, and a bare message catch event is
-      not one.
-    -->
-    <subProcess id="awaitActivation" name="Await activation callback">
-      <startEvent id="waitStarted"/>
-      <sequenceFlow id="waitToMessage" sourceRef="waitStarted" targetRef="activationCallback"/>
-      <intermediateCatchEvent id="activationCallback" name="Number activated">
-        <messageEventDefinition messageRef="numberActivated"/>
-      </intermediateCatchEvent>
-      <sequenceFlow id="messageToWaitEnd" sourceRef="activationCallback" targetRef="waitEnded"/>
-      <endEvent id="waitEnded"/>
-    </subProcess>
+      <serviceTask id="reserveNumber" name="Reserve phone number"
+                   flowable:async="true"
+                   flowable:failedJobRetryTimeCycle="R3/PT10S"
+                   flowable:delegateExpression="${reserveNumberDelegate}"/>
+      <boundaryEvent id="compensateReserveNumber" attachedToRef="reserveNumber">
+        <compensateEventDefinition/>
+      </boundaryEvent>
+      <serviceTask id="undoReserveNumber" name="Release phone number" isForCompensation="true"
+                   flowable:delegateExpression="${releaseNumberDelegate}"/>
+      <sequenceFlow id="toRequestActivation" sourceRef="reserveNumber" targetRef="requestActivation"/>
 
-    <!--
-      Interrupting boundary timer: the supplier promised an answer within the SLA and did not
-      deliver one. The token is taken off the wait and the order fails - a stuck order that nobody
-      notices is worse than a failed one that somebody does.
-    -->
-    <boundaryEvent id="activationSlaBreached" name="Activation SLA breached"
-                   attachedToRef="awaitActivation" cancelActivity="true">
-      <timerEventDefinition>
-        <timeDuration>PT2H</timeDuration>
-      </timerEventDefinition>
-    </boundaryEvent>
-    <sequenceFlow id="slaToTimeout" sourceRef="activationSlaBreached" targetRef="activationTimedOut"/>
-    <serviceTask id="activationTimedOut" name="Record activation timeout"
-                 flowable:async="true"
-                 flowable:delegateExpression="${activationTimedOutDelegate}"/>
-    <sequenceFlow id="timeoutToFail" sourceRef="activationTimedOut" targetRef="failOrder"/>
+      <!--
+        The supplier can reject an activation outright - the number is already ported, the address
+        does not match. That is a business answer, not a technical fault, so the delegate raises a
+        BPMN error instead of throwing. The difference decides everything downstream: an exception
+        means "try again, this might work", a BPMN error means "this will never work, unwind".
+      -->
+      <serviceTask id="requestActivation" name="Request number activation"
+                   flowable:async="true"
+                   flowable:failedJobRetryTimeCycle="R3/PT10S"
+                   flowable:delegateExpression="${requestActivationDelegate}"/>
+      <boundaryEvent id="activationRejected" name="Rejected by supplier" attachedToRef="requestActivation">
+        <errorEventDefinition errorRef="SUPPLIER_REJECTED"/>
+      </boundaryEvent>
+      <boundaryEvent id="compensateRequestActivation" attachedToRef="requestActivation">
+        <compensateEventDefinition/>
+      </boundaryEvent>
+      <serviceTask id="undoRequestActivation" name="Cancel activation" isForCompensation="true"
+                   flowable:delegateExpression="${cancelActivationDelegate}"/>
+      <sequenceFlow id="rejectedToRecord" sourceRef="activationRejected" targetRef="recordRejection"/>
+      <serviceTask id="recordRejection" name="Record supplier rejection"
+                   flowable:async="true"
+                   flowable:delegateExpression="${recordRejectionDelegate}"/>
+      <sequenceFlow id="recordToCancel" sourceRef="recordRejection" targetRef="fulfilmentCancelled"/>
+      <sequenceFlow id="toAwaitActivation" sourceRef="requestActivation" targetRef="awaitActivation"/>
 
-    <!--
-      Non-interrupting boundary timer, repeating: keep the customer informed while we wait. The
-      token stays on the wait - cancelActivity="false" is what makes this a side effect rather than
-      a detour - and the cycle fires up to three times.
-    -->
-    <boundaryEvent id="activationReminder" name="Remind customer"
-                   attachedToRef="awaitActivation" cancelActivity="false">
-      <timerEventDefinition>
-        <timeCycle>R3/PT30M</timeCycle>
-      </timerEventDefinition>
-    </boundaryEvent>
-    <sequenceFlow id="reminderToSend" sourceRef="activationReminder" targetRef="sendReminder"/>
-    <serviceTask id="sendReminder" name="Send progress reminder"
-                 flowable:async="true"
-                 flowable:delegateExpression="${sendReminderDelegate}"/>
-    <sequenceFlow id="reminderToEnd" sourceRef="sendReminder" targetRef="reminderSent"/>
-    <endEvent id="reminderSent" name="Reminder sent"/>
+      <!--
+        Waiting for the supplier's callback. Wrapped in a subprocess purely so timers can be
+        attached: boundary events attach to activities, and a bare message catch event is not one.
+      -->
+      <subProcess id="awaitActivation" name="Await activation callback">
+        <startEvent id="waitStarted"/>
+        <sequenceFlow id="waitToMessage" sourceRef="waitStarted" targetRef="activationCallback"/>
+        <intermediateCatchEvent id="activationCallback" name="Number activated">
+          <messageEventDefinition messageRef="numberActivated"/>
+        </intermediateCatchEvent>
+        <sequenceFlow id="messageToWaitEnd" sourceRef="activationCallback" targetRef="waitEnded"/>
+        <endEvent id="waitEnded"/>
+      </subProcess>
 
-    <sequenceFlow id="toShipHardware" sourceRef="awaitActivation" targetRef="shipHardware"/>
+      <!--
+        Interrupting: the supplier promised an answer within the SLA and did not deliver one. A
+        stuck order nobody notices is worse than a failed one somebody does.
+      -->
+      <boundaryEvent id="activationSlaBreached" name="Activation SLA breached"
+                     attachedToRef="awaitActivation" cancelActivity="true">
+        <timerEventDefinition>
+          <timeDuration>PT2H</timeDuration>
+        </timerEventDefinition>
+      </boundaryEvent>
+      <sequenceFlow id="slaToTimeout" sourceRef="activationSlaBreached" targetRef="activationTimedOut"/>
+      <serviceTask id="activationTimedOut" name="Record activation timeout"
+                   flowable:async="true"
+                   flowable:delegateExpression="${activationTimedOutDelegate}"/>
+      <sequenceFlow id="timeoutToCancel" sourceRef="activationTimedOut" targetRef="fulfilmentCancelled"/>
 
-    <serviceTask id="shipHardware" name="Ship hardware"
-                 flowable:async="true"
-                 flowable:failedJobRetryTimeCycle="R3/PT10S"
-                 flowable:delegateExpression="${shipHardwareDelegate}"/>
-    <sequenceFlow id="toWaitBeforePolling" sourceRef="shipHardware" targetRef="waitBeforePolling"/>
+      <!--
+        Non-interrupting and repeating: keep the customer informed while we wait.
+        cancelActivity="false" is what makes this a side effect rather than a detour - the token
+        stays on the wait, so the callback can still arrive.
+      -->
+      <boundaryEvent id="activationReminder" name="Remind customer"
+                     attachedToRef="awaitActivation" cancelActivity="false">
+        <timerEventDefinition>
+          <timeCycle>R3/PT30M</timeCycle>
+        </timerEventDefinition>
+      </boundaryEvent>
+      <sequenceFlow id="reminderToSend" sourceRef="activationReminder" targetRef="sendReminder"/>
+      <serviceTask id="sendReminder" name="Send progress reminder"
+                   flowable:async="true"
+                   flowable:delegateExpression="${sendReminderDelegate}"/>
+      <sequenceFlow id="reminderToEnd" sourceRef="sendReminder" targetRef="reminderSent"/>
+      <endEvent id="reminderSent" name="Reminder sent"/>
 
-    <!--
-      Poll loop. Shipping takes days to weeks, and the supplier offers no callback for it, so the
-      process sleeps on a timer and asks again. While it sleeps it costs nothing but a row in
-      ACT_RU_TIMER_JOB - no thread, no memory, and it resumes after a restart.
-    -->
-    <intermediateCatchEvent id="waitBeforePolling" name="Wait before polling">
-      <timerEventDefinition>
-        <timeDuration>${shipmentPollDelay}</timeDuration>
-      </timerEventDefinition>
-    </intermediateCatchEvent>
-    <sequenceFlow id="toPollShipment" sourceRef="waitBeforePolling" targetRef="pollShipment"/>
+      <sequenceFlow id="toShipHardware" sourceRef="awaitActivation" targetRef="shipHardware"/>
 
-    <serviceTask id="pollShipment" name="Poll shipment status"
-                 flowable:async="true"
-                 flowable:failedJobRetryTimeCycle="R3/PT10S"
-                 flowable:delegateExpression="${pollShipmentDelegate}"/>
-    <sequenceFlow id="toDeliveredGateway" sourceRef="pollShipment" targetRef="deliveredGateway"/>
+      <serviceTask id="shipHardware" name="Ship hardware"
+                   flowable:async="true"
+                   flowable:failedJobRetryTimeCycle="R3/PT10S"
+                   flowable:delegateExpression="${shipHardwareDelegate}"/>
+      <boundaryEvent id="compensateShipHardware" attachedToRef="shipHardware">
+        <compensateEventDefinition/>
+      </boundaryEvent>
+      <serviceTask id="undoShipHardware" name="Cancel shipment" isForCompensation="true"
+                   flowable:delegateExpression="${cancelShipmentDelegate}"/>
+      <sequenceFlow id="toWaitBeforePolling" sourceRef="shipHardware" targetRef="awaitDelivery"/>
 
-    <exclusiveGateway id="deliveredGateway" name="Delivered?"/>
-    <sequenceFlow id="notDeliveredYet" sourceRef="deliveredGateway" targetRef="waitBeforePolling">
-      <conditionExpression xsi:type="tFormalExpression">${!shipmentDelivered}</conditionExpression>
-    </sequenceFlow>
-    <sequenceFlow id="deliveredToComplete" sourceRef="deliveredGateway" targetRef="completeOrder">
-      <conditionExpression xsi:type="tFormalExpression">${shipmentDelivered}</conditionExpression>
-    </sequenceFlow>
+      <!--
+        Poll loop, wrapped in a subprocess so that a cancellation boundary event has something to
+        attach to. Shipping takes days to weeks and the supplier offers no callback for it, so the
+        process sleeps on a timer and asks again. While asleep it costs one row in ACT_RU_TIMER_JOB
+        - no thread, no memory - and it resumes after a restart.
+      -->
+      <subProcess id="awaitDelivery" name="Await delivery">
+        <startEvent id="deliveryWaitStarted"/>
+        <sequenceFlow id="toWaitBeforePollingInner" sourceRef="deliveryWaitStarted" targetRef="waitBeforePolling"/>
 
+        <intermediateCatchEvent id="waitBeforePolling" name="Wait before polling">
+          <timerEventDefinition>
+            <timeDuration>${shipmentPollDelay}</timeDuration>
+          </timerEventDefinition>
+        </intermediateCatchEvent>
+        <sequenceFlow id="toPollShipment" sourceRef="waitBeforePolling" targetRef="pollShipment"/>
+
+        <serviceTask id="pollShipment" name="Poll shipment status"
+                     flowable:async="true"
+                     flowable:failedJobRetryTimeCycle="R3/PT10S"
+                     flowable:delegateExpression="${pollShipmentDelegate}"/>
+        <sequenceFlow id="toDeliveredGateway" sourceRef="pollShipment" targetRef="deliveredGateway"/>
+
+        <exclusiveGateway id="deliveredGateway" name="Delivered?"/>
+        <sequenceFlow id="notDeliveredYet" sourceRef="deliveredGateway" targetRef="waitBeforePolling">
+          <conditionExpression xsi:type="tFormalExpression">${!shipmentDelivered}</conditionExpression>
+        </sequenceFlow>
+        <sequenceFlow id="deliveredToDeliveryEnd" sourceRef="deliveredGateway" targetRef="delivered">
+          <conditionExpression xsi:type="tFormalExpression">${shipmentDelivered}</conditionExpression>
+        </sequenceFlow>
+        <endEvent id="delivered"/>
+      </subProcess>
+      <sequenceFlow id="toProvisioned" sourceRef="awaitDelivery" targetRef="provisioned"/>
+
+      <endEvent id="provisioned" name="Service provisioned"/>
+
+      <!--
+        Cancellation by the client. It is caught on the two activities where the order actually
+        waits, and both routes lead to the transaction's own cancel end event - the only place from
+        which compensation runs.
+
+        A boundary event on the transaction itself would be simpler to draw and useless in practice:
+        interrupting the transaction destroys the compensation subscriptions along with the scope,
+        so the unwind would find nothing to undo. Cancelling at the wait states is also the honest
+        model of the domain - those waits are hours and weeks long, and they are when a client
+        actually changes their mind.
+      -->
+      <boundaryEvent id="cancelDuringActivation" name="Cancelled during activation"
+                     attachedToRef="awaitActivation" cancelActivity="true">
+        <messageEventDefinition messageRef="cancelOrder"/>
+      </boundaryEvent>
+      <sequenceFlow id="cancelActivationToRecord" sourceRef="cancelDuringActivation" targetRef="recordCancellation"/>
+
+      <boundaryEvent id="cancelDuringDelivery" name="Cancelled during delivery"
+                     attachedToRef="awaitDelivery" cancelActivity="true">
+        <messageEventDefinition messageRef="cancelOrder"/>
+      </boundaryEvent>
+      <sequenceFlow id="cancelDeliveryToRecord" sourceRef="cancelDuringDelivery" targetRef="recordCancellation"/>
+
+      <serviceTask id="recordCancellation" name="Record cancellation request"
+                   flowable:async="true"
+                   flowable:delegateExpression="${recordCancellationDelegate}"/>
+      <sequenceFlow id="recordCancellationToCancel" sourceRef="recordCancellation" targetRef="fulfilmentCancelled"/>
+
+      <!--
+        The cancel end event: reaching it unwinds the transaction. Every completed activity above
+        has its compensation handler invoked, newest first, and only then does the cancel boundary
+        event outside this transaction fire.
+      -->
+      <endEvent id="fulfilmentCancelled" name="Fulfilment cancelled">
+        <cancelEventDefinition/>
+      </endEvent>
+
+
+      <!--
+        Associations bind each compensation boundary event to its handler. They live down here
+        rather than beside the tasks they belong to because the BPMN schema classifies them as
+        artifacts, and artifacts must follow every flow element in their container.
+        They must also stay inside the transaction: Flowable resolves a compensation handler
+        through the association in the same scope as the boundary event, so moving them up to
+        process level leaves the subscriptions in place but silently unbound - compensation
+        then runs and does nothing at all.
+      -->
+      <association id="assocCustomer" associationDirection="One"
+                   sourceRef="compensateCreateCustomer" targetRef="undoCreateCustomer"/>
+      <association id="assocSubscription" associationDirection="One"
+                   sourceRef="compensateCreateSubscription" targetRef="undoCreateSubscription"/>
+      <association id="assocUser" associationDirection="One"
+                   sourceRef="compensateCreateUser" targetRef="undoCreateUser"/>
+      <association id="assocNumber" associationDirection="One"
+                   sourceRef="compensateReserveNumber" targetRef="undoReserveNumber"/>
+      <association id="assocActivation" associationDirection="One"
+                   sourceRef="compensateRequestActivation" targetRef="undoRequestActivation"/>
+      <association id="assocShipment" associationDirection="One"
+                   sourceRef="compensateShipHardware" targetRef="undoShipHardware"/>
+    </transaction>
+
+    <sequenceFlow id="toCompleteOrder" sourceRef="fulfilment" targetRef="completeOrder"/>
     <serviceTask id="completeOrder" name="Complete order"
                  flowable:async="true"
                  flowable:delegateExpression="${completeOrderDelegate}"/>
     <sequenceFlow id="toOrderCompleted" sourceRef="completeOrder" targetRef="orderCompleted"/>
     <endEvent id="orderCompleted" name="Order completed"/>
+
+    <!--
+      Fires once the transaction has unwound itself, which happens only after every compensation
+      handler inside it has run. Both internal failure routes - a supplier rejection and a breached
+      SLA - arrive here.
+    -->
+    <boundaryEvent id="fulfilmentUnwound" name="Fulfilment unwound" attachedToRef="fulfilment">
+      <cancelEventDefinition/>
+    </boundaryEvent>
+    <sequenceFlow id="unwoundToOutcome" sourceRef="fulfilmentUnwound" targetRef="outcomeGateway"/>
+
+    <!--
+      All three unwind routes arrive at the same boundary event, and by then the cause is no longer
+      on the stack - so it has to have been written down as a variable while it still was.
+    -->
+    <exclusiveGateway id="outcomeGateway" name="Cancelled by client?"/>
+    <sequenceFlow id="outcomeToCancelled" sourceRef="outcomeGateway" targetRef="cancelOrderTask">
+      <conditionExpression xsi:type="tFormalExpression">${cancelledByClient}</conditionExpression>
+    </sequenceFlow>
+    <sequenceFlow id="outcomeToFailed" sourceRef="outcomeGateway" targetRef="failOrder">
+      <conditionExpression xsi:type="tFormalExpression">${!cancelledByClient}</conditionExpression>
+    </sequenceFlow>
+
+    <serviceTask id="cancelOrderTask" name="Cancel order"
+                 flowable:async="true"
+                 flowable:delegateExpression="${cancelOrderDelegate}"/>
+    <sequenceFlow id="toOrderCancelled" sourceRef="cancelOrderTask" targetRef="orderCancelled"/>
+    <endEvent id="orderCancelled" name="Order cancelled"/>
 
     <serviceTask id="failOrder" name="Fail order"
                  flowable:async="true"
@@ -168,5 +308,6 @@
   </process>
 
   <message id="numberActivated" name="numberActivated"/>
+  <message id="cancelOrder" name="cancelOrder"/>
   <error id="SUPPLIER_REJECTED" errorCode="SUPPLIER_REJECTED"/>
 </definitions>

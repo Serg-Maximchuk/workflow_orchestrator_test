@@ -22,5 +22,11 @@ public final class OrderVariables {
     /** How long the process sleeps between shipment polls; read by the timer in the model. */
     public static final String SHIPMENT_POLL_DELAY = "shipmentPollDelay";
 
+    /**
+     * Whether the unwind was requested by the client rather than caused by a failure. Read by the
+     * gateway after compensation, which is the point where the original cause is no longer known.
+     */
+    public static final String CANCELLED_BY_CLIENT = "cancelledByClient";
+
     private OrderVariables() {}
 }
