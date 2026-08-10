@@ -29,7 +29,7 @@ services:
     volumes:
       - ./stubs:/home/wiremock
 
-  # Used from Phase 5 for the transactional outbox and idempotent consumer.
+  # Carries order events from the transactional outbox to the idempotent consumer.
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
     container_name: sil-rabbitmq

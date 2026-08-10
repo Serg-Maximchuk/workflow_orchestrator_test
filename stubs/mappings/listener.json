@@ -1,0 +1,9 @@
+{
+  "mappings": [
+    {
+      "name": "Client order-event listener",
+      "request": { "method": "POST", "urlPath": "/listener/order-events" },
+      "response": { "status": 204 }
+    }
+  ]
+}
