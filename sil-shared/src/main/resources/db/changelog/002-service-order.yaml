@@ -1,0 +1,100 @@
+databaseChangeLog:
+  - changeSet:
+      id: 003-service-order
+      author: sil
+      comment: >-
+        Our own view of the order, kept separately from the engine's runtime state. The API has to
+        answer GET /serviceOrder/{id} long after the process instance is gone, and business queries
+        belong in SQL rather than in engine queries over process variables.
+      changes:
+        - createTable:
+            tableName: service_order
+            columns:
+              - column:
+                  name: id
+                  type: varchar(50)
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: external_id
+                  type: varchar(100)
+              - column:
+                  name: state
+                  type: varchar(30)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: process_instance_id
+                  type: varchar(64)
+              - column:
+                  name: customer_name
+                  type: varchar(150)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: customer_email
+                  type: varchar(150)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: postcode
+                  type: varchar(20)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: service_spec_id
+                  type: varchar(60)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: speed_mbps
+                  type: int
+              - column:
+                  name: supplier_customer_id
+                  type: varchar(64)
+              - column:
+                  name: supplier_subscription_id
+                  type: varchar(64)
+              - column:
+                  name: supplier_user_id
+                  type: varchar(64)
+              - column:
+                  name: phone_number
+                  type: varchar(32)
+              - column:
+                  name: failure_reason
+                  type: varchar(500)
+              - column:
+                  name: correlation_id
+                  type: varchar(60)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamp
+                  constraints:
+                    nullable: false
+              - column:
+                  name: updated_at
+                  type: timestamp
+                  constraints:
+                    nullable: false
+              - column:
+                  name: version
+                  type: bigint
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+        - createIndex:
+            tableName: service_order
+            indexName: idx_service_order_state
+            columns:
+              - column:
+                  name: state
+        - createIndex:
+            tableName: service_order
+            indexName: idx_service_order_correlation
+            columns:
+              - column:
+                  name: correlation_id

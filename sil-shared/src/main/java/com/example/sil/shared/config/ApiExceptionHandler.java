@@ -1,6 +1,7 @@
 package com.example.sil.shared.config;
 
 import com.example.sil.shared.idempotency.IdempotencyKeyReuseException;
+import com.example.sil.shared.orders.ServiceOrderService.ServiceOrderNotFoundException;
 import com.example.sil.shared.qualification.ServiceQualificationService.QualificationNotFoundException;
 import com.example.sil.shared.supplier.VoipSupplierClient.SupplierUnavailableException;
 import org.springframework.http.HttpStatus;
@@ -21,6 +22,11 @@ public class ApiExceptionHandler {
     @ExceptionHandler(QualificationNotFoundException.class)
     ProblemDetail handleNotFound(QualificationNotFoundException e) {
         return problem(HttpStatus.NOT_FOUND, "Qualification not found", e.getMessage());
+    }
+
+    @ExceptionHandler(ServiceOrderNotFoundException.class)
+    ProblemDetail handleOrderNotFound(ServiceOrderNotFoundException e) {
+        return problem(HttpStatus.NOT_FOUND, "Service order not found", e.getMessage());
     }
 
     @ExceptionHandler(IdempotencyKeyReuseException.class)

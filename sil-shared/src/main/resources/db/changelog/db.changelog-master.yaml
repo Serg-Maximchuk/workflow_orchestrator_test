@@ -3,3 +3,5 @@ databaseChangeLog:
   # (flowable.database-schema-update), so the two never fight over the same changelog.
   - include:
       file: db/changelog/001-idempotency-and-qualification.yaml
+  - include:
+      file: db/changelog/002-service-order.yaml
