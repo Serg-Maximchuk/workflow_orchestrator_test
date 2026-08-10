@@ -26,6 +26,8 @@ dependencies {
     // Spring Boot 4 moved Liquibase auto-configuration out of spring-boot-autoconfigure
     // into its own starter; liquibase-core alone is on the classpath but never runs.
     api("org.springframework.boot:spring-boot-starter-liquibase")
+    // The transactional outbox publishes over AMQP.
+    api("org.springframework.boot:spring-boot-starter-amqp")
 
     // Retry, timeout and circuit breaker around the supplier calls. resilience4j-spring-boot4 is
     // the variant built for Spring Boot 4; the -spring-boot3 artifact targets the older baseline.

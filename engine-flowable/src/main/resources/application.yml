@@ -25,7 +25,17 @@ spring:
           voip-supplier:
             token-uri: ${SIL_SUPPLIER_TOKEN_URI:http://localhost:8081/supplier/oauth/token}
 
+spring.rabbitmq:
+  host: ${SIL_RABBIT_HOST:localhost}
+  port: ${SIL_RABBIT_PORT:5672}
+  username: ${SIL_RABBIT_USER:guest}
+  password: ${SIL_RABBIT_PASSWORD:guest}
+
 sil:
+  messaging:
+    # Turned off where there is no broker - the fast test lane, for one.
+    enabled: ${SIL_MESSAGING_ENABLED:true}
+    listener-url: ${SIL_LISTENER_URL:http://localhost:8081/listener/order-events}
   workflow:
     # How long the process sleeps between shipment polls. Passed to the model as a variable rather
     # than hard-coded, so changing it does not mean deploying a new process version.

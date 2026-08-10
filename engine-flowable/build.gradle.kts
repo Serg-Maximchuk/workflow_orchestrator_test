@@ -25,6 +25,7 @@ dependencies {
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
     testImplementation("org.testcontainers:testcontainers-junit-jupiter")
     testImplementation("org.testcontainers:testcontainers-postgresql")
+    testImplementation("org.testcontainers:testcontainers-rabbitmq")
     // In-process stand-in for the supplier APIs, so the fast lane needs no Docker.
     testImplementation("org.wiremock:wiremock-standalone:3.13.2")
     // In-memory database for fast tests that do not need real Postgres.

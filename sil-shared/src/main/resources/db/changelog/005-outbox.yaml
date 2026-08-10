@@ -1,0 +1,75 @@
+databaseChangeLog:
+  - changeSet:
+      id: 006-transactional-outbox
+      author: sil
+      comment: >-
+        The outbox and the consumer's guard against redelivery. Both exist because a message broker
+        and a database cannot be updated atomically: writing the event to this table in the same
+        transaction as the order change is what makes "the order completed" and "somebody was told"
+        impossible to get out of step.
+      changes:
+        - createTable:
+            tableName: outbox_event
+            columns:
+              - column:
+                  name: id
+                  type: varchar(50)
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: aggregate_id
+                  type: varchar(50)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: event_type
+                  type: varchar(60)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: payload
+                  type: text
+                  constraints:
+                    nullable: false
+              - column:
+                  name: correlation_id
+                  type: varchar(60)
+                  constraints:
+                    nullable: false
+              - column:
+                  name: created_at
+                  type: timestamp
+                  constraints:
+                    nullable: false
+              - column:
+                  name: published_at
+                  type: timestamp
+              - column:
+                  name: attempts
+                  type: int
+                  defaultValueNumeric: 0
+                  constraints:
+                    nullable: false
+        - createIndex:
+            tableName: outbox_event
+            indexName: idx_outbox_unpublished
+            columns:
+              - column:
+                  name: published_at
+              - column:
+                  name: created_at
+        - createTable:
+            tableName: processed_message
+            columns:
+              - column:
+                  name: message_id
+                  type: varchar(50)
+                  constraints:
+                    primaryKey: true
+                    nullable: false
+              - column:
+                  name: processed_at
+                  type: timestamp
+                  constraints:
+                    nullable: false

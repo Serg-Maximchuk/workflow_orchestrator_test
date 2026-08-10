@@ -9,3 +9,5 @@ databaseChangeLog:
       file: db/changelog/003-async-fulfilment.yaml
   - include:
       file: db/changelog/004-cancellation.yaml
+  - include:
+      file: db/changelog/005-outbox.yaml
