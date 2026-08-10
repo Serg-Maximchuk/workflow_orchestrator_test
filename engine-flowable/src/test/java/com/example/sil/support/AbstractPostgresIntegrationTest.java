@@ -21,7 +21,15 @@ import org.testcontainers.postgresql.PostgreSQLContainer;
  * reachable. Testcontainers' Ryuk sidecar removes it when the JVM exits.
  */
 @Tag("integration")
-@SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
+@SpringBootTest(
+        webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT,
+        properties = {
+                // No broker in this lane. The condition keeps our own messaging beans out, and the
+                // health contributor has to go with them - otherwise /actuator/health reports the
+                // application down because it cannot reach a RabbitMQ nobody started.
+                "sil.messaging.enabled=false",
+                "management.health.rabbit.enabled=false"
+        })
 public abstract class AbstractPostgresIntegrationTest {
 
     protected static final PostgreSQLContainer POSTGRES =

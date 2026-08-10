@@ -36,6 +36,7 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
         "spring.datasource.driver-class-name=org.h2.Driver",
         "spring.datasource.username=sa",
         "spring.datasource.password=",
+        "sil.messaging.enabled=false",
         "flowable.async-executor-activate=false",
         // One attempt per request keeps the arithmetic below obvious.
         "resilience4j.retry.instances.voipSupplier.max-attempts=1",

@@ -44,6 +44,7 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
         "spring.datasource.driver-class-name=org.h2.Driver",
         "spring.datasource.username=sa",
         "spring.datasource.password=",
+        "sil.messaging.enabled=false",
         "flowable.async-executor-activate=false",
         // Keep the retry test quick; the production values back off much further.
         "resilience4j.retry.instances.voipSupplier.wait-duration=10ms",

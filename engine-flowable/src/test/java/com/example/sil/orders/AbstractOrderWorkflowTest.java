@@ -41,7 +41,10 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
         "spring.datasource.driver-class-name=org.h2.Driver",
         "spring.datasource.username=sa",
         "spring.datasource.password=",
-        "flowable.async-executor-activate=false"
+        "flowable.async-executor-activate=false",
+        // No broker in the fast lane: the outbox still fills up, it just is not drained here.
+        // OutboxTest covers the draining, against a real RabbitMQ.
+        "sil.messaging.enabled=false"
 })
 @AutoConfigureMockMvc
 abstract class AbstractOrderWorkflowTest {

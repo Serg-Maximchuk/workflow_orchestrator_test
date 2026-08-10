@@ -21,7 +21,8 @@ import org.springframework.boot.test.context.SpringBootTest;
         "spring.datasource.password=",
         // Timers and async jobs are driven explicitly in process tests, not by a background
         // thread, so results are deterministic.
-        "flowable.async-executor-activate=false"
+        "flowable.async-executor-activate=false",
+        "sil.messaging.enabled=false"
 })
 class EngineBootstrapH2Test {
 
