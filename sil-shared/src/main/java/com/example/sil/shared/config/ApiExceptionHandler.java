@@ -1,7 +1,9 @@
 package com.example.sil.shared.config;
 
 import com.example.sil.shared.idempotency.IdempotencyKeyReuseException;
+import com.example.sil.shared.orders.OrderOrchestrator.NoWaitingOrderException;
 import com.example.sil.shared.orders.ServiceOrderService.ServiceOrderNotFoundException;
+import com.example.sil.shared.orders.WorkflowAdmin.UnknownDeadLetterWorkException;
 import com.example.sil.shared.qualification.ServiceQualificationService.QualificationNotFoundException;
 import com.example.sil.shared.supplier.VoipSupplierClient.SupplierUnavailableException;
 import org.springframework.http.HttpStatus;
@@ -27,6 +29,21 @@ public class ApiExceptionHandler {
     @ExceptionHandler(ServiceOrderNotFoundException.class)
     ProblemDetail handleOrderNotFound(ServiceOrderNotFoundException e) {
         return problem(HttpStatus.NOT_FOUND, "Service order not found", e.getMessage());
+    }
+
+    @ExceptionHandler(UnknownDeadLetterWorkException.class)
+    ProblemDetail handleUnknownDeadLetterWork(UnknownDeadLetterWorkException e) {
+        return problem(HttpStatus.NOT_FOUND, "Dead letter work not found", e.getMessage());
+    }
+
+    /**
+     * A callback for an order that is not waiting is a conflict rather than a 404: the order may
+     * well exist, it has simply moved past the point where this message meant anything. Answering
+     * 404 would invite the supplier to treat it as "unknown order" and give up on a live one.
+     */
+    @ExceptionHandler(NoWaitingOrderException.class)
+    ProblemDetail handleUnexpectedCallback(NoWaitingOrderException e) {
+        return problem(HttpStatus.CONFLICT, "No order waiting for this callback", e.getMessage());
     }
 
     @ExceptionHandler(IdempotencyKeyReuseException.class)
