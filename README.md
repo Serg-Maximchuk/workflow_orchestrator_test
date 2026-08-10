@@ -175,6 +175,12 @@ Everything at once:
 └── .github/workflows/ci.yml
 ```
 
+## Working on the process model
+
+`engine-flowable/src/main/resources/processes/serviceOrder.bpmn20.xml` carries its diagram
+interchange, so it opens in any BPMN modeller. Edit it there rather than by hand - the layout in
+the file was generated once to get it into a modeller, and the modeller owns it from now on.
+
 ## Notes
 
 - Spring Boot 4.1.0 with Flowable 8.0.0. Flowable 8 is the line built against Spring Boot 4.0.x /

@@ -31,6 +31,17 @@
 - Never `@Data` or `@EqualsAndHashCode` on a JPA entity — identity is the primary key, and
   field-based equality breaks once a mutable field changes while the instance is in a collection.
 
+## BPMN models
+
+- Process models carry diagram interchange (`<bpmndi:BPMNDiagram>`) and are **edited in a modeller**
+  (bpmn.io, Flowable Modeler, Camunda Modeler), not by hand. Hand-editing is how you get artifact
+  ordering violations, duplicate ids and silently unbound compensation handlers.
+- Boundary events: declare an error boundary event **before** a compensation boundary event on the
+  same activity. Flowable resolves an error by walking boundary events in document order and fails
+  on a compensation event it meets first.
+- Compensation handlers must not be `flowable:async` — the transaction tears down before the queued
+  jobs run and nothing is undone.
+
 ## Build
 
 - Java 25 toolchain, Spring Boot 4.1.x, Flowable 8.x (the Flowable line that supports Spring Boot 4).
