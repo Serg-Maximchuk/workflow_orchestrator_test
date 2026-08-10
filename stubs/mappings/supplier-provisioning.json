@@ -1,0 +1,47 @@
+{
+  "mappings": [
+    {
+      "name": "Create customer",
+      "request": { "method": "POST", "urlPath": "/supplier/v1/customers" },
+      "response": {
+        "status": 201,
+        "headers": { "Content-Type": "application/json" },
+        "jsonBody": { "customerId": "{{randomValue type='UUID'}}" },
+        "transformers": ["response-template"]
+      }
+    },
+    {
+      "name": "Create subscription",
+      "request": { "method": "POST", "urlPath": "/supplier/v1/subscriptions" },
+      "response": {
+        "status": 201,
+        "headers": { "Content-Type": "application/json" },
+        "jsonBody": { "subscriptionId": "{{randomValue type='UUID'}}" },
+        "transformers": ["response-template"]
+      }
+    },
+    {
+      "name": "Create user",
+      "request": { "method": "POST", "urlPath": "/supplier/v1/users" },
+      "response": {
+        "status": 201,
+        "headers": { "Content-Type": "application/json" },
+        "jsonBody": { "userId": "{{randomValue type='UUID'}}" },
+        "transformers": ["response-template"]
+      }
+    },
+    {
+      "name": "Reserve phone number",
+      "request": { "method": "POST", "urlPath": "/supplier/v1/numbers/reservations" },
+      "response": {
+        "status": 201,
+        "headers": { "Content-Type": "application/json" },
+        "jsonBody": {
+          "phoneNumber": "+4420{{randomValue type='NUMERIC' length=7}}",
+          "reservationId": "{{randomValue type='UUID'}}"
+        },
+        "transformers": ["response-template"]
+      }
+    }
+  ]
+}
