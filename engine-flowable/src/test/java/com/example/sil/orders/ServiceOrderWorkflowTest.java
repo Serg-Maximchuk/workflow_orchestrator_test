@@ -30,6 +30,7 @@ class ServiceOrderWorkflowTest extends AbstractOrderWorkflowTest {
         supplier.resetAll();
         stubHappyPathSupplier();
         deleteRunningProcessInstances();
+        resetClock();
     }
 
     @Test
@@ -46,11 +47,12 @@ class ServiceOrderWorkflowTest extends AbstractOrderWorkflowTest {
     }
 
     @Test
-    @DisplayName("drives the four supplier operations in order and completes the order")
+    @DisplayName("drives the supplier operations in order and completes the order")
     void fulfilsTheOrderThroughTheSupplierOperations() throws Exception {
         String orderId = submitOrder();
 
         executeAllJobs();
+        completeActivationAndDelivery(orderId);
 
         var order = fetchOrder(orderId);
         assertThat(order.read("$.state", String.class)).isEqualTo("completed");
@@ -130,6 +132,7 @@ class ServiceOrderWorkflowTest extends AbstractOrderWorkflowTest {
     void reportsATimelineFromEngineHistory() throws Exception {
         String orderId = submitOrder();
         executeAllJobs();
+        completeActivationAndDelivery(orderId);
 
         MvcResult result = mockMvc.perform(MockMvcRequestBuilders.get(ORDERS_URL + "/" + orderId + "/timeline"))
                 .andExpect(MockMvcResultMatchers.status().isOk())
@@ -138,9 +141,19 @@ class ServiceOrderWorkflowTest extends AbstractOrderWorkflowTest {
         var timeline = JsonPath.parse(result.getResponse().getContentAsString());
         List<String> steps = timeline.read("$.steps[*].name");
 
+        // Ordering is asserted only up to the point where the test starts moving the clock.
+        // advanceClockBy pins the engine clock to a fixed instant, so everything after it is
+        // recorded with the same timestamp and no time-based ordering can separate those steps.
+        // That is a property of time travel in the test, not of the endpoint.
         assertThat(steps).containsSubsequence(
                 "Create customer", "Create subscription", "Create user",
-                "Reserve phone number", "Complete order");
+                "Reserve phone number", "Request number activation",
+                "Await activation callback", "Ship hardware");
+        assertThat(steps).contains("Poll shipment status", "Complete order", "Order completed");
+        assertThat(steps)
+                .as("plumbing and never-fired boundary events are not steps a person wants to read")
+                .doesNotContain("Delivered?", "Rejected by supplier", "Activation SLA breached",
+                        "Remind customer", "waitStarted", "waitEnded");
         assertThat(timeline.read("$.state", String.class)).isEqualTo("completed");
         assertThat(timeline.read("$.steps[0].durationMillis", Object.class))
                 .as("history records how long each step took")

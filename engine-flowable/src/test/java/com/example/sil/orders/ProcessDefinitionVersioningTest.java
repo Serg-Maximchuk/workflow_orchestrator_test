@@ -38,6 +38,7 @@ class ProcessDefinitionVersioningTest extends AbstractOrderWorkflowTest {
         supplier.resetAll();
         stubHappyPathSupplier();
         deleteRunningProcessInstances();
+        resetClock();
     }
 
     @AfterEach
@@ -72,8 +73,9 @@ class ProcessDefinitionVersioningTest extends AbstractOrderWorkflowTest {
         assertThat(definitionIdOf(newOrderId)).isNotEqualTo(inFlightDefinitionId);
         assertThat(versionOf(definitionIdOf(newOrderId))).isEqualTo(versionBefore + 1);
 
-        // And the old instance still finishes through the old model: five steps, four supplier calls.
+        // And the old instance still finishes through the old model, callback and all.
         executeAllJobs();
+        completeActivationAndDelivery(inFlightOrderId);
         assertThat(fetchOrderState(inFlightOrderId)).isEqualTo("completed");
     }
 
