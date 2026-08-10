@@ -4,7 +4,7 @@ import org.junit.jupiter.api.Tag;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.DynamicPropertyRegistry;
 import org.springframework.test.context.DynamicPropertySource;
-import org.testcontainers.containers.PostgreSQLContainer;
+import org.testcontainers.postgresql.PostgreSQLContainer;
 
 /**
  * Base class for tests that need the real database the application runs against in production.
@@ -24,8 +24,8 @@ import org.testcontainers.containers.PostgreSQLContainer;
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT)
 public abstract class AbstractPostgresIntegrationTest {
 
-    protected static final PostgreSQLContainer<?> POSTGRES =
-            new PostgreSQLContainer<>("postgres:16-alpine");
+    protected static final PostgreSQLContainer POSTGRES =
+            new PostgreSQLContainer("postgres:16-alpine");
 
     static {
         POSTGRES.start();

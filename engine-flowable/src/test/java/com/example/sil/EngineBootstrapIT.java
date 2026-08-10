@@ -8,8 +8,12 @@ import org.flowable.engine.RepositoryService;
 import org.flowable.engine.RuntimeService;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Test;
+import java.net.URI;
+import java.net.http.HttpClient;
+import java.net.http.HttpRequest;
+import java.net.http.HttpResponse;
 import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.web.client.TestRestTemplate;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.jdbc.core.JdbcTemplate;
 
 /**
@@ -31,8 +35,8 @@ class EngineBootstrapIT extends AbstractPostgresIntegrationTest {
     @Autowired
     private JdbcTemplate jdbcTemplate;
 
-    @Autowired
-    private TestRestTemplate restTemplate;
+    @Value("${local.server.port}")
+    private int port;
 
     @Test
     @DisplayName("the Flowable engine is embedded in the Spring context")
@@ -71,9 +75,17 @@ class EngineBootstrapIT extends AbstractPostgresIntegrationTest {
 
     @Test
     @DisplayName("actuator reports the application as healthy")
-    void actuatorHealthIsUp() {
-        String body = restTemplate.getForObject("/actuator/health", String.class);
-        assertThat(body).contains("\"status\":\"UP\"");
+    void actuatorHealthIsUp() throws Exception {
+        HttpRequest request = HttpRequest.newBuilder()
+                .uri(URI.create("http://localhost:" + port + "/actuator/health"))
+                .GET()
+                .build();
+
+        HttpResponse<String> response =
+                HttpClient.newHttpClient().send(request, HttpResponse.BodyHandlers.ofString());
+
+        assertThat(response.statusCode()).isEqualTo(200);
+        assertThat(response.body()).contains("\"status\":\"UP\"");
     }
 
     private boolean tableExists(String tableName) {
