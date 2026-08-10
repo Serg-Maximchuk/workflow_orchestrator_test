@@ -1,5 +1,7 @@
 package com.example.sil.orders;
 
+import static com.github.tomakehurst.wiremock.client.WireMock.aResponse;
+import static com.github.tomakehurst.wiremock.client.WireMock.delete;
 import static com.github.tomakehurst.wiremock.client.WireMock.get;
 import static com.github.tomakehurst.wiremock.client.WireMock.okJson;
 import static com.github.tomakehurst.wiremock.client.WireMock.post;
@@ -103,6 +105,27 @@ abstract class AbstractOrderWorkflowTest {
         supplier.stubFor(post(urlPathEqualTo(SHIPMENTS_PATH))
                 .willReturn(okJson("{\"shipmentId\":\"ship-1\"}")));
         stubShipmentStatus("delivered");
+        stubCompensatingCalls();
+    }
+
+    /**
+     * Every provisioning call has an undo, so every test needs the undo stubbed - even the ones
+     * that are not about compensation. Leaving them out makes an unrelated failure path fail for
+     * the wrong reason: the unwind itself starts erroring and retrying.
+     */
+    protected void stubCompensatingCalls() {
+        supplier.stubFor(delete(urlPathMatching("/supplier/v1/customers/.*"))
+                .willReturn(aResponse().withStatus(204)));
+        supplier.stubFor(delete(urlPathMatching("/supplier/v1/subscriptions/.*"))
+                .willReturn(aResponse().withStatus(204)));
+        supplier.stubFor(delete(urlPathMatching("/supplier/v1/users/.*"))
+                .willReturn(aResponse().withStatus(204)));
+        supplier.stubFor(delete(urlPathMatching("/supplier/v1/numbers/reservations/.*"))
+                .willReturn(aResponse().withStatus(204)));
+        supplier.stubFor(delete(urlPathMatching("/supplier/v1/numbers/activations/.*"))
+                .willReturn(aResponse().withStatus(204)));
+        supplier.stubFor(delete(urlPathMatching("/supplier/v1/shipments/.*"))
+                .willReturn(aResponse().withStatus(204)));
     }
 
     protected void stubShipmentStatus(String status) {
