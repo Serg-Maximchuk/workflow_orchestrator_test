@@ -1,0 +1,158 @@
+{
+  "info": {
+    "name": "Service Integration Layer",
+    "description": "Manual exploration of the SIL API. Requires the local stack (docker compose up -d) and the application (./gradlew :engine-flowable:bootRun). The supplier is WireMock on port 8081, stubs live in ./stubs.",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "variable": [
+    { "key": "baseUrl", "value": "http://localhost:8080" },
+    { "key": "supplierUrl", "value": "http://localhost:8081" },
+    { "key": "qualificationId", "value": "" },
+    { "key": "idempotencyKey", "value": "demo-key-1" }
+  ],
+  "item": [
+    {
+      "name": "Qualify a serviceable address",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "pm.test('qualified', () => pm.expect(pm.response.json().qualificationResult).to.eql('qualified'));",
+              "pm.collectionVariables.set('qualificationId', pm.response.json().id);"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "X-Correlation-Id", "value": "postman-{{$guid}}" },
+          { "key": "Idempotency-Key", "value": "{{idempotencyKey}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"externalId\": \"OMS-4711\",\n  \"place\": { \"postcode\": \"SW1A 1AA\", \"streetAddress\": \"10 Downing Street\" },\n  \"serviceSpecId\": \"VOIP_BUSINESS\",\n  \"requestedSpeedMbps\": 100\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/tmf-api/serviceQualification/v5/checkServiceQualification",
+          "host": ["{{baseUrl}}"],
+          "path": ["tmf-api", "serviceQualification", "v5", "checkServiceQualification"]
+        },
+        "description": "Happy path. Note the response echoes X-Correlation-Id: the same id appears in the application log and in the WireMock request journal."
+      }
+    },
+    {
+      "name": "Replay the same request (idempotency)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": [
+              "pm.test('201 Created', () => pm.response.to.have.status(201));",
+              "pm.test('same resource as the first call', () =>",
+              "  pm.expect(pm.response.json().id).to.eql(pm.collectionVariables.get('qualificationId')));"
+            ]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Idempotency-Key", "value": "{{idempotencyKey}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"externalId\": \"OMS-4711\",\n  \"place\": { \"postcode\": \"SW1A 1AA\", \"streetAddress\": \"10 Downing Street\" },\n  \"serviceSpecId\": \"VOIP_BUSINESS\",\n  \"requestedSpeedMbps\": 100\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/tmf-api/serviceQualification/v5/checkServiceQualification",
+          "host": ["{{baseUrl}}"],
+          "path": ["tmf-api", "serviceQualification", "v5", "checkServiceQualification"]
+        },
+        "description": "Same key, same body: the stored result is replayed and the supplier is not called again. Check the WireMock request count to confirm."
+      }
+    },
+    {
+      "name": "Reuse the key with a different body (409)",
+      "event": [
+        {
+          "listen": "test",
+          "script": {
+            "type": "text/javascript",
+            "exec": ["pm.test('409 Conflict', () => pm.response.to.have.status(409));"]
+          }
+        }
+      ],
+      "request": {
+        "method": "POST",
+        "header": [
+          { "key": "Content-Type", "value": "application/json" },
+          { "key": "Idempotency-Key", "value": "{{idempotencyKey}}" }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"externalId\": \"OMS-9999\",\n  \"place\": { \"postcode\": \"EC1A 1BB\" },\n  \"serviceSpecId\": \"VOIP_BUSINESS\",\n  \"requestedSpeedMbps\": 500\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/tmf-api/serviceQualification/v5/checkServiceQualification",
+          "host": ["{{baseUrl}}"],
+          "path": ["tmf-api", "serviceQualification", "v5", "checkServiceQualification"]
+        },
+        "description": "Replaying a stored answer here would answer a question the caller did not ask, so this is rejected rather than replayed."
+      }
+    },
+    {
+      "name": "Qualify an address outside the footprint",
+      "request": {
+        "method": "POST",
+        "header": [{ "key": "Content-Type", "value": "application/json" }],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"externalId\": \"OMS-4712\",\n  \"place\": { \"postcode\": \"ZZ99 9ZZ\" },\n  \"serviceSpecId\": \"VOIP_BUSINESS\",\n  \"requestedSpeedMbps\": 100\n}"
+        },
+        "url": {
+          "raw": "{{baseUrl}}/tmf-api/serviceQualification/v5/checkServiceQualification",
+          "host": ["{{baseUrl}}"],
+          "path": ["tmf-api", "serviceQualification", "v5", "checkServiceQualification"]
+        },
+        "description": "The ZZ99 9ZZ stub answers 'not available', so the result is unqualified."
+      }
+    },
+    {
+      "name": "Retrieve a qualification",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{baseUrl}}/tmf-api/serviceQualification/v5/checkServiceQualification/{{qualificationId}}",
+          "host": ["{{baseUrl}}"],
+          "path": ["tmf-api", "serviceQualification", "v5", "checkServiceQualification", "{{qualificationId}}"]
+        }
+      }
+    },
+    {
+      "name": "OpenAPI document",
+      "request": {
+        "method": "GET",
+        "url": { "raw": "{{baseUrl}}/v3/api-docs", "host": ["{{baseUrl}}"], "path": ["v3", "api-docs"] }
+      }
+    },
+    {
+      "name": "Supplier requests seen by WireMock",
+      "request": {
+        "method": "GET",
+        "url": {
+          "raw": "{{supplierUrl}}/__admin/requests",
+          "host": ["{{supplierUrl}}"],
+          "path": ["__admin", "requests"]
+        },
+        "description": "The stub's request journal: use it to confirm the correlation id was forwarded and how many times the supplier was actually called."
+      }
+    }
+  ]
+}
