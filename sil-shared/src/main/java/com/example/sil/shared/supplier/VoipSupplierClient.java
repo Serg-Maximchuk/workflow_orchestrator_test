@@ -12,14 +12,16 @@ import org.springframework.web.client.RestClientException;
 /**
  * Adapter for the external VOIP and hardware supplier.
  *
- * <p>Phase 1 implements only the availability check behind Service Qualification. The six
- * provisioning operations from the specification (customer, subscription, user, number reservation,
- * number activation, hardware shipment) are added in Phase 2, when a workflow drives them.
+ * <p>Covers four of the six provisioning operations from the specification. The remaining two -
+ * number activation with its asynchronous callback, and hardware shipment with its multi-week
+ * status polling - arrive in Phase 3, because both need engine features (message correlation and
+ * timers) that do not exist yet.
  *
- * <p>Retry here is deliberately narrow: it covers the transient network and 5xx case, and it is
- * bounded. Once a workflow engine owns the call, this kind of in-process retry gets replaced by
- * engine-managed retry - the difference being that engine retries survive a restart of this
- * application, while a {@code @Retry} loop does not.
+ * <p>Note what is <em>not</em> here: retry on the provisioning calls. The availability check keeps
+ * its {@code @Retry} because it is called synchronously from an HTTP request with a caller waiting.
+ * The provisioning calls are driven by the workflow engine, and retrying them in-process would be
+ * strictly worse than letting the engine do it: an engine retry is a row in the database, so it
+ * survives a restart of this application, while a {@code @Retry} loop dies with the thread.
  */
 @Component
 public class VoipSupplierClient {
@@ -50,12 +52,52 @@ public class VoipSupplierClient {
                 .body(AvailabilityResponse.class);
     }
 
+    /** Supplier operation 1 of 6: register the customer. */
+    public CustomerResponse createCustomer(CreateCustomerRequest request) {
+        log.info("Creating supplier customer for {}", request.externalId());
+        return restClient.post()
+                .uri("/supplier/v1/customers")
+                .body(request)
+                .retrieve()
+                .body(CustomerResponse.class);
+    }
+
+    /** Supplier operation 2 of 6: open a subscription under an existing customer. */
+    public SubscriptionResponse createSubscription(CreateSubscriptionRequest request) {
+        log.info("Creating supplier subscription for customer {}", request.customerId());
+        return restClient.post()
+                .uri("/supplier/v1/subscriptions")
+                .body(request)
+                .retrieve()
+                .body(SubscriptionResponse.class);
+    }
+
+    /** Supplier operation 3 of 6: create the end user on the subscription. */
+    public UserResponse createUser(CreateUserRequest request) {
+        log.info("Creating supplier user on subscription {}", request.subscriptionId());
+        return restClient.post()
+                .uri("/supplier/v1/users")
+                .body(request)
+                .retrieve()
+                .body(UserResponse.class);
+    }
+
+    /** Supplier operation 4 of 6: reserve a phone number for the user. */
+    public NumberReservationResponse reserveNumber(ReserveNumberRequest request) {
+        log.info("Reserving a number for user {}", request.userId());
+        return restClient.post()
+                .uri("/supplier/v1/numbers/reservations")
+                .body(request)
+                .retrieve()
+                .body(NumberReservationResponse.class);
+    }
+
     /**
-     * Invoked by the circuit breaker when the supplier is failing consistently. Returning a
-     * "cannot qualify right now" answer keeps our own API responsive instead of passing the
-     * supplier's outage straight through to the caller.
+     * Invoked when the supplier is failing consistently. Returning a "cannot qualify right now"
+     * answer keeps our own API responsive instead of passing the supplier's outage straight
+     * through to the caller.
      */
-    @SuppressWarnings("unused") // referenced by name from @CircuitBreaker
+    @SuppressWarnings("unused") // referenced by name from @Retry
     private AvailabilityResponse availabilityUnavailable(AvailabilityRequest request, Exception e) {
         log.warn("Supplier availability check failed for postcode {}: {}",
                 request.postcode(), e.toString());
@@ -66,6 +108,22 @@ public class VoipSupplierClient {
     public record AvailabilityRequest(String postcode, String serviceSpecId, Integer requestedSpeedMbps) {}
 
     public record AvailabilityResponse(boolean available, List<String> offeredServiceSpecIds, Integer maxSpeedMbps) {}
+
+    public record CreateCustomerRequest(String externalId, String name, String email, String postcode) {}
+
+    public record CustomerResponse(String customerId) {}
+
+    public record CreateSubscriptionRequest(String customerId, String serviceSpecId, Integer speedMbps) {}
+
+    public record SubscriptionResponse(String subscriptionId) {}
+
+    public record CreateUserRequest(String subscriptionId, String displayName, String email) {}
+
+    public record UserResponse(String userId) {}
+
+    public record ReserveNumberRequest(String userId, String areaCode) {}
+
+    public record NumberReservationResponse(String phoneNumber, String reservationId) {}
 
     /** Raised when the supplier could not answer, after retries and the circuit breaker. */
     public static class SupplierUnavailableException extends RestClientException {
