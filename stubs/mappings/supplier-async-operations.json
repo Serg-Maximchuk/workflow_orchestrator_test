@@ -1,0 +1,63 @@
+{
+  "mappings": [
+    {
+      "name": "Request number activation",
+      "request": {
+        "method": "POST",
+        "urlPath": "/supplier/v1/numbers/activations"
+      },
+      "response": {
+        "status": 202,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "jsonBody": {
+          "activationId": "{{randomValue type='UUID'}}",
+          "status": "accepted"
+        },
+        "transformers": [
+          "response-template"
+        ]
+      }
+    },
+    {
+      "name": "Ship hardware",
+      "request": {
+        "method": "POST",
+        "urlPath": "/supplier/v1/shipments"
+      },
+      "response": {
+        "status": 201,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "jsonBody": {
+          "shipmentId": "{{randomValue type='UUID'}}"
+        },
+        "transformers": [
+          "response-template"
+        ]
+      }
+    },
+    {
+      "name": "Shipment status - delivered",
+      "request": {
+        "method": "GET",
+        "urlPathPattern": "/supplier/v1/shipments/.*"
+      },
+      "response": {
+        "status": 200,
+        "headers": {
+          "Content-Type": "application/json"
+        },
+        "jsonBody": {
+          "shipmentId": "{{request.pathSegments.[3]}}",
+          "status": "delivered"
+        },
+        "transformers": [
+          "response-template"
+        ]
+      }
+    }
+  ]
+}
