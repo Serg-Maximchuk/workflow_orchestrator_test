@@ -59,9 +59,6 @@ jobs:
           name: integration-test-reports
           path: '**/build/reports/tests/integrationTest'
 
-  # Added in Phase 5: starts the stack with docker compose, kicks off an order, restarts the
-  # application mid-process and asserts the workflow resumed and completed.
-  # restart-recovery:
-  #   name: Mid-process restart recovery
-  #   runs-on: ubuntu-latest
-  #   needs: integration-test
+  # The recovery tests boot and kill real application instances against Testcontainers, so they run
+  # inside the integration lane above rather than as a job of their own. docs/recovery-demo.md is
+  # the by-hand version of the same thing.

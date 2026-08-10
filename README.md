@@ -111,7 +111,21 @@ supplier's system:
 - an order reaches `cancelled` only after the last undo has succeeded; the supplier references are
   cleared as each one is undone
 
-Not yet: the restart demo, the outbox and clustering. That is Phase 5.
+Durability, which is the reason to embed an engine at all:
+
+- **Recovery after a mid-process restart.** Kill the application while an order is parked, start it
+  again, and the order finishes - with every supplier call still having happened exactly once. See
+  [docs/recovery-demo.md](docs/recovery-demo.md) to watch it, or `MidProcessRestartIT` to have it
+  asserted
+- **Two instances, one database**, and no job ever runs twice - including the rolling-deploy case
+  where the instance doing the work dies mid-order
+- **Transactional outbox**: order events are written in the same transaction as the order change, so
+  "the order completed" and "somebody was told" cannot get out of step. A poller turns rows into
+  messages, publishing before marking so nothing is lost
+- **Idempotent consumer**: at-least-once delivery meets a primary key, so a redelivered message
+  notifies the listener once
+
+That is the third and last place idempotency appears, after the HTTP API and the job executor.
 
 ## Requirements
 

@@ -195,7 +195,7 @@ must-have demo.
 - Covers: 13, 25
 - **Artifact:** a test asserting the **order** of compensation calls in the WireMock journal
 
-### Phase 5 — durability and recovery (1 day) ⭐ the headline demo
+### Phase 5 — durability and recovery (1 day) ⭐ the headline demo — DONE
 - Integration test: start an order → the process waits on a timer or message →
   `docker restart sil-app` (or stop/start the Spring context against the same database) → the
   process runs to completion
