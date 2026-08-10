@@ -8,11 +8,16 @@ import java.time.Instant;
 import lombok.AccessLevel;
 import lombok.Getter;
 import lombok.NoArgsConstructor;
+import org.springframework.data.domain.Persistable;
 
 /**
  * One row per {@code Idempotency-Key} the API has seen, holding the response that was returned the
  * first time. The primary key is the idempotency key itself, so a concurrent duplicate loses the
  * insert race at the database level rather than in application logic.
+ *
+ * <p>That only works because of {@link Persistable} below. Spring Data picks persist or merge from
+ * the identifier, and an assigned one makes it merge - which updates the row that is already there
+ * instead of failing, so the concurrent duplicate would win silently rather than lose the race.
  *
  * <p>Only {@code @Getter} and a protected no-args constructor are generated. Deliberately not
  * {@code @Data} or {@code @EqualsAndHashCode}: an entity's identity is its primary key, and
@@ -24,7 +29,7 @@ import lombok.NoArgsConstructor;
 @Table(name = "idempotency_record")
 @Getter
 @NoArgsConstructor(access = AccessLevel.PROTECTED) // required by JPA
-public class IdempotencyRecord {
+public class IdempotencyRecord implements Persistable<String> {
 
     @Id
     @Column(name = "idempotency_key", nullable = false, length = 200)
@@ -50,5 +55,16 @@ public class IdempotencyRecord {
         this.resourceId = resourceId;
         this.responseStatus = responseStatus;
         this.createdAt = Instant.now();
+    }
+
+    @Override
+    public String getId() {
+        return idempotencyKey;
+    }
+
+    @Override
+    public boolean isNew() {
+        // Only ever inserted: an existing row is a duplicate request, which is the whole point.
+        return true;
     }
 }
