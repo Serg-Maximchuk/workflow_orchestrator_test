@@ -12,10 +12,10 @@ import org.springframework.web.client.RestClientException;
 /**
  * Adapter for the external VOIP and hardware supplier.
  *
- * <p>Covers four of the six provisioning operations from the specification. The remaining two -
- * number activation with its asynchronous callback, and hardware shipment with its multi-week
- * status polling - arrive in Phase 3, because both need engine features (message correlation and
- * timers) that do not exist yet.
+ * <p>Covers all six provisioning operations. The last two are the interesting ones: number
+ * activation answers "accepted" and reports the real outcome later through a callback, and hardware
+ * shipment takes weeks and has to be polled. Neither fits a request/response call, which is exactly
+ * why the workflow engine earns its place.
  *
  * <p>Note what is <em>not</em> here: retry on the provisioning calls. The availability check keeps
  * its {@code @Retry} because it is called synchronously from an HTTP request with a caller waiting.
@@ -93,6 +93,44 @@ public class VoipSupplierClient {
     }
 
     /**
+     * Supplier operation 5 of 6: request activation of the reserved number.
+     *
+     * <p>The supplier answers "accepted" and nothing more - porting a number involves the losing
+     * carrier and can take hours or days. The real outcome arrives later on our callback endpoint,
+     * which is why the process waits on a message rather than on this call returning.
+     */
+    public ActivationAcceptedResponse activateNumber(ActivateNumberRequest request) {
+        log.info("Requesting activation of {} for user {}", request.phoneNumber(), request.userId());
+        return restClient.post()
+                .uri("/supplier/v1/numbers/activations")
+                .body(request)
+                .retrieve()
+                .body(ActivationAcceptedResponse.class);
+    }
+
+    /** Supplier operation 6 of 6: ship the handset. */
+    public ShipmentResponse shipHardware(ShipHardwareRequest request) {
+        log.info("Requesting hardware shipment for order {}", request.orderReference());
+        return restClient.post()
+                .uri("/supplier/v1/shipments")
+                .body(request)
+                .retrieve()
+                .body(ShipmentResponse.class);
+    }
+
+    /**
+     * Polls a shipment. The supplier offers no callback for this one, so the process has to ask -
+     * on a timer, for as long as it takes.
+     */
+    public ShipmentStatusResponse getShipmentStatus(String shipmentId) {
+        log.info("Polling shipment {}", shipmentId);
+        return restClient.get()
+                .uri("/supplier/v1/shipments/{shipmentId}", shipmentId)
+                .retrieve()
+                .body(ShipmentStatusResponse.class);
+    }
+
+    /**
      * Invoked when the supplier is failing consistently. Returning a "cannot qualify right now"
      * answer keeps our own API responsive instead of passing the supplier's outage straight
      * through to the caller.
@@ -124,6 +162,16 @@ public class VoipSupplierClient {
     public record ReserveNumberRequest(String userId, String areaCode) {}
 
     public record NumberReservationResponse(String phoneNumber, String reservationId) {}
+
+    public record ActivateNumberRequest(String userId, String phoneNumber, String callbackCorrelationId) {}
+
+    public record ActivationAcceptedResponse(String activationId, String status) {}
+
+    public record ShipHardwareRequest(String orderReference, String postcode, String hardwareType) {}
+
+    public record ShipmentResponse(String shipmentId) {}
+
+    public record ShipmentStatusResponse(String shipmentId, String status) {}
 
     /** Raised when the supplier could not answer, after retries and the circuit breaker. */
     public static class SupplierUnavailableException extends RestClientException {
