@@ -11,10 +11,8 @@ description = "Telecom Service Integration Layer on an embedded Flowable 8 engin
 val flowableVersion = "8.0.0"
 
 dependencies {
-    implementation("org.springframework.boot:spring-boot-starter-webmvc")
+    implementation(project(":sil-shared"))
     implementation("org.springframework.boot:spring-boot-starter-actuator")
-    implementation("org.springframework.boot:spring-boot-starter-data-jpa")
-    implementation("org.springframework.boot:spring-boot-starter-validation")
 
     // Process engine only. The CMMN/DMN/app engines are pulled in later (DMN in Phase 6),
     // so the schema stays small and startup stays fast.
@@ -23,10 +21,13 @@ dependencies {
     runtimeOnly("org.postgresql:postgresql")
 
     testImplementation("org.springframework.boot:spring-boot-starter-test")
+    testImplementation("org.springframework.boot:spring-boot-starter-webmvc-test")
     testImplementation("org.springframework.boot:spring-boot-testcontainers")
     testImplementation("org.testcontainers:testcontainers-junit-jupiter")
     testImplementation("org.testcontainers:testcontainers-postgresql")
-    // In-memory database for fast BPMN process tests that do not need real Postgres.
+    // In-process stand-in for the supplier APIs, so the fast lane needs no Docker.
+    testImplementation("org.wiremock:wiremock-standalone:3.13.2")
+    // In-memory database for fast tests that do not need real Postgres.
     testRuntimeOnly("com.h2database:h2")
     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
