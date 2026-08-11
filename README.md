@@ -1,55 +1,59 @@
-# Service Integration Layer — workflow engine playground
+# Service Integration Layer — a workflow engine, learned by building one
 
-A learning project built around workflow orchestration: a telecom **Service Integration Layer**
-that drives VOIP and hardware order journeys between a commercial order management system and
-downstream suppliers, implemented on top of a BPMN engine.
+A telecom **Service Integration Layer**: it drives VOIP and hardware order journeys between a
+commercial order management system and a downstream supplier, on top of an embedded BPMN engine.
 
-The point is not the telecom domain — it is to hit, with tests, every orchestration concern that
-shows up in real integration work: long-running processes, timers, retries, dead letters,
-compensation (saga), idempotency, correlation IDs, transactional outbox, and clean recovery after a
-mid-process restart.
+The domain is a vehicle. The point is to hit — with tests that actually prove it — every
+orchestration concern that turns up in integration work: long-running processes, timers, engine-side
+retries, dead letters, sagas with compensation, idempotency at three separate layers, correlation
+IDs, a transactional outbox, and recovery after the application is killed mid-order.
 
-The full breakdown lives in [PLAN.md](PLAN.md).
+Phase-by-phase reasoning and the full feature matrix live in [PLAN.md](PLAN.md).
 
-## Engines
+## Engines side by side
 
-Each engine gets its own module and **none replaces another** — the same order journey is meant to
-end up implemented several times, side by side, so the implementations can be compared directly.
+Each engine gets its own module and **none replaces another**. The same order journey is meant to
+end up implemented several times, runnable at the same time, so the implementations can be compared
+directly instead of through git history.
 
 | Module | Engine | Model | Status |
 |---|---|---|---|
-| [`engine-flowable`](engine-flowable) | Flowable 8, embedded | BPMN 2.0, engine inside the Spring context, state in the app's own Postgres | Phases 0-1 done |
+| [`engine-flowable`](engine-flowable) | Flowable 8, embedded | BPMN 2.0, engine inside the Spring context, state in the application's own Postgres | working |
 | `engine-camunda8` | Camunda 8 / Zeebe | BPMN 2.0, remote broker, job workers | planned |
 
-Engine-agnostic code - the TMF APIs, the supplier adapter, idempotency and correlation - lives in
-[`sil-shared`](sil-shared), so adding an engine means adding process definitions and their glue,
-not a second copy of the API.
+Everything engine-agnostic — the TMF APIs, the supplier adapter, idempotency, correlation, the
+outbox — lives in [`sil-shared`](sil-shared) behind an `OrderOrchestrator` port. Adding an engine
+means adding process definitions and their glue, not a second copy of the API.
 
-## What works today
+## Quick start
 
-TMF645 Service Qualification, end to end and synchronous:
+Requires JDK 25 (the Gradle toolchain provisions it) and Docker.
 
-- `POST /tmf-api/serviceQualification/v5/checkServiceQualification` calls the supplier and stores
-  the answer; `GET .../{id}` returns it later
-- retrying with the same `Idempotency-Key` replays the first answer and does **not** call the
-  supplier again; reusing the key with a different body is a 409
-- `X-Correlation-Id` is echoed to the caller, written to every log line, forwarded to the supplier
-  and stored with the result
-- the supplier call has connect and read timeouts, bounded retry with exponential backoff, and a
-  circuit breaker; a supplier outage becomes a 503 rather than a hung thread
-- outbound calls carry an OAuth2 client-credentials token, fetched once and reused
-- OpenAPI at `/v3/api-docs`, Swagger UI at `/swagger-ui.html`, deviations from TMF recorded in
-  [docs/variance-log.md](docs/variance-log.md)
+```bash
+docker compose up -d
+```
 
-TMF641 Service Ordering, fulfilled by a BPMN process:
+```bash
+./gradlew :engine-flowable:bootRun
+```
 
-- `POST /tmf-api/serviceOrdering/v4/serviceOrder` stores the order, starts a workflow and returns
-  immediately - no supplier has been contacted yet
-- the workflow drives four supplier operations in order (customer -> subscription -> user -> number
-  reservation), each as its own async job with its own transaction
-- `GET .../{id}` reports the supplier references gathered so far; `GET .../{id}/timeline` reports
-  the steps actually taken and how long each one took, read from engine history
-- an order in flight when a new process version is deployed keeps running the version it started on
+Submit an order:
+
+```bash
+curl -s -X POST localhost:8080/tmf-api/serviceOrdering/v4/serviceOrder \
+  -H 'Content-Type: application/json' -H 'X-Correlation-Id: demo' \
+  -d '{"externalId":"OMS-1","customer":{"name":"Acme Ltd","email":"ops@acme.example"},
+       "place":{"postcode":"SW1A 1AA"},"serviceSpecId":"VOIP_BUSINESS","speedMbps":100}'
+```
+
+It returns immediately with `"state": "inProgress"` — no supplier has been contacted yet. Poll
+`GET /tmf-api/serviceOrdering/v4/serviceOrder/{id}` to watch provisioning fill in, and
+`GET .../{id}/timeline` to see what the engine actually did.
+
+API docs: `/swagger-ui.html`. Supplier stubs: `localhost:8081/__admin`. Broker UI:
+`localhost:15672` (guest/guest).
+
+## The order journey
 
 ```mermaid
 flowchart LR
@@ -58,121 +62,96 @@ flowchart LR
     C --> D[Create user]
     D --> E[Reserve phone number]
     E --> F[Request activation]
-    F -->|supplier rejects| C{{Cancel: unwind}}
+    F -->|supplier rejects| X{{Cancel: unwind}}
     F --> G[Await activation callback]
-    G -->|SLA breached| C
-    G -->|client cancels| C
+    G -->|SLA breached| X
+    G -->|client cancels| X
     G -.->|every 30 min| R[Send reminder]
     G --> H[Ship hardware]
     H --> W(["Await delivery: wait, poll, repeat"])
-    W -->|client cancels| C
+    W -->|client cancels| X
     W --> Z[Complete order]
-    C --> U[/"Compensate: undo every completed step, newest first"/]
+    X --> U[/"Compensate: undo every completed step, newest first"/]
     U --> XE([Order failed / cancelled])
     Z --> ZE([Order completed])
 ```
 
 Everything from `Create customer` to `Await delivery` runs inside a BPMN **transaction subprocess**,
-which is what makes the unwind arrow above real rather than aspirational.
+which is what makes that unwind arrow real rather than decorative. The model is
+[`serviceOrder.bpmn20.xml`](engine-flowable/src/main/resources/processes/serviceOrder.bpmn20.xml).
 
-Every service task is async, which is the point rather than an optimisation: each supplier call
-gets its own transaction boundary, so a failure at step three does not undo the two remote side
-effects that already happened - and from Phase 3, its own retry counter, stored in the database and
-therefore surviving a restart.
+## What it demonstrates
 
-The unreliable half - the part a workflow engine exists for:
+**Durable, long-running work.** Every service task is async, so each supplier call gets its own
+transaction boundary and its own retry counter, and the submitting request returns as soon as the
+order is durable. Waiting costs one database row: a process parked on a callback or asleep between
+shipment polls holds no thread and no memory.
 
-- **Retries** are engine-managed (`R3/PT10S` per step). A retry is a row with a due date and a
-  remaining count, so a redeploy in the middle of a backoff loses nothing
-- **Dead letter queue** for work that exhausted its retries: `GET /admin/workflow/dead-letter` says
-  which order is stuck and why, `POST .../{id}/retry` resumes it from the failed step once the
-  cause is fixed. The order is parked, not failed and not half-applied
-- **Business error vs technical failure**: a supplier rejection (4xx) is raised as a BPMN error and
-  takes the rejection path immediately; a 5xx or a timeout is retried. Retrying a rejection just
-  annoys the supplier and delays telling the customer
-- **Message correlation**: activation is confirmed later on `POST /callbacks/voip/number-activation`.
-  A duplicate or late callback gets a 409 rather than disturbing an order that has moved on
-- **Timers**: an interrupting SLA timer fails an order the supplier never confirmed; a repeating
-  non-interrupting timer sends reminders without taking the order off its wait; a poll loop sleeps
-  between shipment checks, costing nothing but a database row while it waits
+**Recovery.** Kill the application mid-order, start it again, and the order finishes — with every
+supplier call still having happened exactly once. Nothing in the codebase implements this; the
+engine's state lives in the same database as the order. Walk through it in
+[docs/recovery-demo.md](docs/recovery-demo.md), or read `MidProcessRestartIT`, which asserts it.
 
-The saga - because a database transaction cannot roll back a customer that now exists in the
-supplier's system:
+**Two instances, one database.** No job ever runs twice, including when the instance doing the work
+dies mid-order and the survivor picks it up.
 
-- every provisioning step has a compensating call attached to it in the model, and all of them run
-  **in reverse order** when fulfilment cannot finish
-- three ways in, one unwind path: the supplier rejects the activation, the SLA expires, or the
-  client calls `POST /serviceOrder/{id}/cancel`
-- the engine already knows how far the order got, so nothing has to answer "what did we do so far?"
-  at each failure point - the alternative, unwinding by hand in a catch block, has to answer it
-  everywhere
-- cancellation is accepted while the order waits on the supplier (the hours and weeks where a
-  client actually changes their mind) and refused with a 409 while a provisioning call is in flight
-- an order reaches `cancelled` only after the last undo has succeeded; the supplier references are
-  cleared as each one is undone
+**Failure that is not the same as error.** A supplier rejection (4xx) is a BPMN error and takes the
+rejection path at once; a 5xx or a timeout is retried by the engine — a retry being a row with a due
+date, so it survives a redeploy. What runs out of retries lands in a dead letter queue, where
+`GET /admin/workflow/dead-letter` says which order is stuck and why, and a resubmit continues from
+the failed step rather than the beginning.
 
-Durability, which is the reason to embed an engine at all:
+**A saga, not a rollback.** A database transaction cannot undo a customer that now exists in the
+supplier's system. Every provisioning step has a compensating call attached to it in the model, and
+they run in reverse order — proven by reading the order of DELETEs out of the stub's journal, not by
+asserting that "compensation happened".
 
-- **Recovery after a mid-process restart.** Kill the application while an order is parked, start it
-  again, and the order finishes - with every supplier call still having happened exactly once. See
-  [docs/recovery-demo.md](docs/recovery-demo.md) to watch it, or `MidProcessRestartIT` to have it
-  asserted
-- **Two instances, one database**, and no job ever runs twice - including the rolling-deploy case
-  where the instance doing the work dies mid-order
-- **Transactional outbox**: order events are written in the same transaction as the order change, so
-  "the order completed" and "somebody was told" cannot get out of step. A poller turns rows into
-  messages, publishing before marking so nothing is lost
-- **Idempotent consumer**: at-least-once delivery meets a primary key, so a redelivered message
-  notifies the listener once
+**Cancellation at any point.** The client's intent is recorded on the order and checked after every
+step, so a cancellation arriving mid-provisioning is accepted rather than refused. Once it is
+recorded, no further supplier call is made.
 
-That is the third and last place idempotency appears, after the HTTP API and the job executor.
+**Idempotency, three times over.** `Idempotency-Key` on the HTTP API; the engine's job executor for
+supplier calls; and `processed_message` for the queue consumer. Each one is a primary key doing the
+work, not a check-then-act.
 
-## Requirements
+**Events that cannot be lost or duplicated.** Order events are written to an outbox in the same
+transaction as the order change, then published by a poller that sends before marking — so a crash
+resends rather than loses, and the consumer's guard absorbs the duplicate.
 
-- JDK 25 (the Gradle toolchain pins the build to 25 and will provision it if missing)
-- Docker (integration tests and the local stack)
-
-## Running
-
-Start the local stack — Postgres, WireMock (supplier stubs), RabbitMQ:
-
-```bash
-docker compose up -d
-```
-
-Run the Flowable application:
-
-```bash
-./gradlew :engine-flowable:bootRun
-```
-
-Health check:
-
-```bash
-curl -s localhost:8080/actuator/health
-```
+**Traceability.** `X-Correlation-Id` follows a journey from the caller through the logs, into
+process variables, back out on supplier calls made hours later on job executor threads, and onto the
+event delivered to the client's listener.
 
 ## Tests
 
 Two lanes, mirroring the two CI jobs.
 
-Fast — unit and BPMN process tests on in-memory H2, no Docker needed:
+Fast — unit and BPMN process tests on in-memory H2, no Docker, engine clock driven by hand so timers
+and SLAs measured in hours are exercised in milliseconds:
 
 ```bash
 ./gradlew test
 ```
 
-Integration — the same engine against a real Postgres via Testcontainers:
+Integration — real Postgres, real RabbitMQ, real supplier stubs, real async executor, and
+applications that are genuinely started and killed:
 
 ```bash
 ./gradlew integrationTest
 ```
 
-Everything at once:
+Both, plus the build:
 
 ```bash
 ./gradlew build
 ```
+
+## Working on the process model
+
+The BPMN carries its diagram interchange, so it opens in any modeller (bpmn.io, Flowable Modeler,
+Camunda Modeler). Edit it there rather than by hand — the layout was generated once to get the file
+into a modeller, and the modeller owns it from now on. [CLAUDE.md](CLAUDE.md) records the modelling
+rules this project learned the expensive way.
 
 ## Layout
 
@@ -181,24 +160,22 @@ Everything at once:
 ├── PLAN.md                 # phase-by-phase plan and the feature/test matrix
 ├── CLAUDE.md               # working rules for this repo
 ├── docker-compose.yml      # postgres + wiremock + rabbitmq
-├── sil-shared/             # TMF APIs, supplier adapter, idempotency, correlation
-├── engine-flowable/        # Service Integration Layer on an embedded Flowable engine
+├── sil-shared/             # engine-agnostic: TMF APIs, supplier adapter, idempotency, outbox
+├── engine-flowable/        # the journey on an embedded Flowable engine
 ├── stubs/                  # WireMock mappings standing in for supplier APIs
-├── postman/                # collection for poking at the API by hand
-├── docs/                   # architecture, variance log, recovery demo, engine comparison
+├── docs/
+│   ├── recovery-demo.md    # kill the app mid-order, by hand
+│   └── variance-log.md     # where the API deviates from TM Forum, and why
 └── .github/workflows/ci.yml
 ```
 
-## Working on the process model
-
-`engine-flowable/src/main/resources/processes/serviceOrder.bpmn20.xml` carries its diagram
-interchange, so it opens in any BPMN modeller. Edit it there rather than by hand - the layout in
-the file was generated once to get it into a modeller, and the modeller owns it from now on.
-
 ## Notes
 
-- Spring Boot 4.1.0 with Flowable 8.0.0. Flowable 8 is the line built against Spring Boot 4.0.x /
-  Spring Framework 7; the older Flowable 7.x line would pin the whole build back to Spring Boot 3.x.
+- Spring Boot 4.1 with Flowable 8. Flowable 8 is the line built against Spring Boot 4 / Spring
+  Framework 7; the 7.x line would pin the whole build back to Spring Boot 3.
 - Flowable manages its own `ACT_*` schema in the same database as the business data. That
   co-location — process state and business state in one transaction — is the main reason this
-  project starts with an embedded engine rather than a remote broker.
+  project uses an embedded engine rather than a remote broker, and the reason the recovery demo
+  needs no code.
+- Inbound APIs are unauthenticated on purpose; the OAuth2 work here is on the outbound side, where
+  the supplier requires client credentials. See the variance log.
